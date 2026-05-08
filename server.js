@@ -1,7 +1,11 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { clerkClient, createClerkClient } = require('@clerk/clerk-sdk-node');
+const connectDB = require('./config/db');
+
+// Importar rutas
+const userRoutes = require('./routes/userRoutes');
+const reporteRoutes = require('./routes/reporteRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,34 +14,23 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Middleware manual para verificar el token
-const authMiddleware = async (req, res, next) => {
-    try {
-        const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-        
-        const token = authHeader.split(' ')[1];
-        const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-        
-        // Verificar el token
-        const payload = await clerk.verifyToken(token);
-        req.auth = { userId: payload.sub };
-        next();
-    } catch (error) {
-        console.error('Auth error:', error);
-        res.status(401).json({ error: 'Invalid token' });
-    }
-};
+// Conectar a MongoDB
+connectDB();
 
-// Ruta pública para probar
+// Rutas
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'Backend funcionando' });
+    res.json({ 
+        status: 'Backend funcionando',
+        mongodb: 'Conectado',
+        version: '1.0.0'
+    });
 });
 
-// Ruta protegida - requiere autenticación
-app.get('/api/protected', authMiddleware, (req, res) => {
+app.use('/api/users', userRoutes);
+app.use('/api/reportes', reporteRoutes);
+
+// Ruta protegida original (por compatibilidad)
+app.get('/api/protected', require('./middleware/auth').authMiddleware, (req, res) => {
     res.json({
         mensaje: "¡Funciona! Este es tu JSON",
         userId: req.auth.userId,
@@ -45,8 +38,23 @@ app.get('/api/protected', authMiddleware, (req, res) => {
     });
 });
 
+// Iniciar servidor
 app.listen(PORT, () => {
     console.log(`🚀 Backend corriendo en http://localhost:${PORT}`);
-    console.log(`📡 Probar salud: http://localhost:${PORT}/api/health`);
-    console.log(`🔒 Ruta protegida: http://localhost:${PORT}/api/protected`);
+    console.log(`📡 Endpoints disponibles:`);
+    console.log(`   GET    /api/health`);
+    console.log(`   GET    /api/protected`);
+    console.log(`   ──────── Usuarios ────────`);
+    console.log(`   GET    /api/users/profile`);
+    console.log(`   PUT    /api/users/profile`);
+    console.log(`   DELETE /api/users/profile`);
+    console.log(`   GET    /api/users (admin)`);
+    console.log(`   ──────── Reportes ────────`);
+    console.log(`   POST   /api/reportes`);
+    console.log(`   GET    /api/reportes`);
+    console.log(`   GET    /api/reportes/mis-reportes`);
+    console.log(`   GET    /api/reportes/:id`);
+    console.log(`   PUT    /api/reportes/:id`);
+    console.log(`   DELETE /api/reportes/:id`);
+    console.log(`   PUT    /api/reportes/:id/categoria-ia (admin)`);
 });
