@@ -33,10 +33,9 @@ const createReporte = async (req, res) => {
         console.log('\n🚨 ========== INICIO CREATE REPORTE ==========');
         console.log('📥 Body recibido:', JSON.stringify(req.body, null, 2));
         console.log('👤 Usuario autenticado:', req.auth?.userId);
-        console.log('📅 Fecha/hora recibida:', req.body.fecha_hora);
         
-        // Verificar campos uno por uno
-        const campos = ['titulo', 'columna_unica', 'direccion', 'fecha_hora'];
+        // Verificar campos requeridos (fecha_hora ya NO es obligatorio)
+        const campos = ['titulo', 'columna_unica', 'direccion'];
         for (const campo of campos) {
             if (!req.body[campo]) {
                 console.log(`❌ Campo faltante: ${campo}`);
@@ -59,11 +58,13 @@ const createReporte = async (req, res) => {
             latitud, 
             longitud, 
             observaciones, 
-            fecha_hora,
             archivo_url,
             archivo_public_id,
             archivo_tipo
         } = req.body;
+
+        // fecha_hora NO se desestructura, se usa directamente de req.body o se genera
+        const fecha_hora = req.body.fecha_hora; // puede ser undefined
 
         console.log('📝 Creando objeto Reporte...');
         const reporteData = {
@@ -75,7 +76,7 @@ const createReporte = async (req, res) => {
             latitud: latitud !== undefined && latitud !== null ? Number(latitud) : 0,
             longitud: longitud !== undefined && longitud !== null ? Number(longitud) : 0,
             observaciones: observaciones ? observaciones.trim() : '',
-            fecha_hora: new Date(fecha_hora),
+            fecha_hora: fecha_hora ? new Date(fecha_hora) : new Date(),
             archivo_url: archivo_url || undefined,
             archivo_public_id: archivo_public_id || undefined,
             archivo_tipo: archivo_tipo || undefined

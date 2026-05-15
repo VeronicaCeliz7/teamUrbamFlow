@@ -1,5 +1,6 @@
 const { createClerkClient } = require('@clerk/clerk-sdk-node');
 const User = require('../models/User');
+const jwt = require('jsonwebtoken'); // 👈 AGREGAR ESTA LÍNEA
 
 const authMiddleware = async (req, res, next) => {
     try {
@@ -14,7 +15,7 @@ const authMiddleware = async (req, res, next) => {
         const payload = await clerk.verifyToken(token);
         req.auth = { userId: payload.sub };
         
-        // 🔄 SINCRONIZACIÓN AUTOMÁTICA - Esta es la parte clave
+        // 🔄 SINCRONIZACIÓN AUTOMÁTICA
         try {
             console.log(`🔄 Verificando usuario en MongoDB: ${payload.sub}`);
             
@@ -33,14 +34,14 @@ const authMiddleware = async (req, res, next) => {
                     apellido: clerkUser.lastName || '',
                     ultimoAcceso: new Date(),
                     activo: true,
-                    createdAt: new Date()
+                    createdAt: new Date(),
+                    rol: 'user' // 👈 Agregar rol por defecto
                 });
                 
                 await user.save();
                 console.log(`✅ Usuario sincronizado correctamente: ${user.email}`);
             } else {
                 console.log(`✅ Usuario ya existe en MongoDB: ${user.email}`);
-                // Actualizar último acceso
                 user.ultimoAcceso = new Date();
                 await user.save();
             }
@@ -48,9 +49,30 @@ const authMiddleware = async (req, res, next) => {
             // Guardar el usuario en req para usarlo en los controladores
             req.user = user;
             
+            // 🍪 NUEVO: Generar cookie propia (urbanflow_session)
+            // Esta cookie contendrá la información del usuario
+            const sessionToken = jwt.sign(
+                { 
+                    userId: user.clerkUserId, 
+                    email: user.email, 
+                    rol: user.rol 
+                },
+                process.env.JWT_SECRET,
+                { expiresIn: '7d' }
+            );
+            
+            // Establecer la cookie en el navegador
+            res.cookie('urbanflow_session', sessionToken, {
+                httpOnly: true,        // No accesible por JavaScript (seguro)
+                secure: process.env.NODE_ENV === 'production', // Solo HTTPS en producción
+                sameSite: 'lax',       // Protección CSRF
+                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 días
+            });
+            
+            console.log(`🍪 Cookie generada para: ${user.email}`);
+            
         } catch (syncError) {
             console.error('❌ Error en sincronización automática:', syncError);
-            // No bloqueamos la request, pero logueamos el error
         }
         
         next();
