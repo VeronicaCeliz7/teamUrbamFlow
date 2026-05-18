@@ -1,12 +1,22 @@
 {
   "name": "urbanflowbackend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Backend UrbanFlow - API para gestion inteligente de incidentes urbanos",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "seed:demo": "node scripts/seedDemo.js",
+    "test": "echo \"No tests configured yet\" && exit 0"
   },
-  "keywords": [],
+  "keywords": [
+    "urbanflow",
+    "express",
+    "mongodb",
+    "mongoose",
+    "smart-city",
+    "incidents"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
