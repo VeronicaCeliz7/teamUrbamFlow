@@ -5,7 +5,16 @@ info:
 
 http:
   method: POST
-  url: http://localhost:3001/api/ai/classify-incident
+  url: http://localhost:3001/api/ia/clasificar
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "texto": "Hay una pérdida enorme de agua frente a la escuela y se está rompiendo toda la calle."
+      }
   auth: inherit
 
 settings:

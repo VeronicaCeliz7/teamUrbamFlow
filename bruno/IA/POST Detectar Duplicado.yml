@@ -6,6 +6,12 @@ info:
 http:
   method: POST
   url: http://localhost:3001/api/ai/detect-duplicate
+  body:
+    type: json
+    data: |-
+      {
+        "texto": "Bache enorme frente al hospital"
+      }
   auth: inherit
 
 settings:

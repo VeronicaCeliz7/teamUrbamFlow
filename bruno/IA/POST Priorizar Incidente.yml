@@ -6,6 +6,14 @@ info:
 http:
   method: POST
   url: http://localhost:3001/api/ai/prioritize-incident
+  body:
+    type: json
+    data: |-
+      {
+        "categoria": "agua",
+        "cantidadReportes": 12,
+        "cercaEscuela": true
+      }
   auth: inherit
 
 settings:

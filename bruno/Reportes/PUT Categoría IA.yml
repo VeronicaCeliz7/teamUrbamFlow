@@ -6,6 +6,12 @@ info:
 http:
   method: PUT
   url: http://localhost:3001/api/reportes/ID_DEL_REPORTE/categoria-ia
+  body:
+    type: json
+    data: |-
+      {
+        "categoria_asignada_por_ia": "bache"
+      }
   auth: inherit
 
 settings:

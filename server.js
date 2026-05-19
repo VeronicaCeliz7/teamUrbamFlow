@@ -9,6 +9,8 @@ const reporteRoutes = require('./routes/reporteRoutes');
 
 const superRoutes = require('./routes/superRoutes');
 
+const iaRoutes = require('./routes/iaRoutes');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -31,6 +33,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/users', userRoutes);
 app.use('/api/reportes', reporteRoutes);
 app.use('/api/super', superRoutes);
+app.use('/api/ia', iaRoutes);
 
 // Ruta protegida original (por compatibilidad)
 app.get('/api/protected', require('./middleware/auth').authMiddleware, (req, res) => {
@@ -65,4 +68,6 @@ app.listen(PORT, () => {
     console.log('   GET    /api/super/clientes');
     console.log('   GET    /api/super/usuarios');
     console.log('   GET    /api/super/reportes');
+    console.log(`   ──────── IA ────────`);
+    console.log(`   POST   /api/ia/clasificar`);
 });
