@@ -1,0 +1,22 @@
+info:
+  name: PUT Actualizar Reporte
+  type: http
+  seq: 5
+
+http:
+  method: PUT
+  url: http://localhost:3001/api/reportes/ID_DEL_REPORTE
+  body:
+    type: json
+    data: |-
+      {
+        "titulo": "Bache reparado parcialmente",
+        "observaciones": "Se realizó reparación temporal"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

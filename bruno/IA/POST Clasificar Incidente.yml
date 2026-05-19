@@ -1,0 +1,15 @@
+info:
+  name: POST Clasificar Incidente
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:3001/api/ai/classify-incident
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

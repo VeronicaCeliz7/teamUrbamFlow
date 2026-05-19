@@ -7,6 +7,8 @@ const connectDB = require('./config/db');
 const userRoutes = require('./routes/userRoutes');
 const reporteRoutes = require('./routes/reporteRoutes');
 
+const superRoutes = require('./routes/superRoutes');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -28,6 +30,7 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/users', userRoutes);
 app.use('/api/reportes', reporteRoutes);
+app.use('/api/super', superRoutes);
 
 // Ruta protegida original (por compatibilidad)
 app.get('/api/protected', require('./middleware/auth').authMiddleware, (req, res) => {
@@ -57,4 +60,9 @@ app.listen(PORT, () => {
     console.log(`   PUT    /api/reportes/:id`);
     console.log(`   DELETE /api/reportes/:id`);
     console.log(`   PUT    /api/reportes/:id/categoria-ia (admin)`);
+    console.log('   _____ Súper Usuario _____');
+    console.log('   GET    /api/super/dashboard');
+    console.log('   GET    /api/super/clientes');
+    console.log('   GET    /api/super/usuarios');
+    console.log('   GET    /api/super/reportes');
 });
