@@ -1,0 +1,23 @@
+info:
+  name: POST Priorizar Incidente
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: http://localhost:3001/api/ai/prioritize-incident
+  body:
+    type: json
+    data: |-
+      {
+        "categoria": "agua",
+        "cantidadReportes": 12,
+        "cercaEscuela": true
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

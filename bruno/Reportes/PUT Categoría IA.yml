@@ -1,0 +1,21 @@
+info:
+  name: PUT Categoría IA
+  type: http
+  seq: 7
+
+http:
+  method: PUT
+  url: http://localhost:3001/api/reportes/ID_DEL_REPORTE/categoria-ia
+  body:
+    type: json
+    data: |-
+      {
+        "categoria_asignada_por_ia": "bache"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
