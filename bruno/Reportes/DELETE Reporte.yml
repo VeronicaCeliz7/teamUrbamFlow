@@ -1,0 +1,15 @@
+info:
+  name: DELETE Reporte
+  type: http
+  seq: 6
+
+http:
+  method: DELETE
+  url: http://localhost:3001/api/reportes/ID_DEL_REPORTE
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

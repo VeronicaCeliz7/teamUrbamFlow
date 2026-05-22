@@ -1,0 +1,27 @@
+info:
+  name: POST Crear Reporte
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:3001/api/reportes
+  body:
+    type: json
+    data: |-
+      {
+        "titulo": "Bache profundo frente a escuela",
+        "columna_unica": "Bache profundo frente a escuela con riesgo vial",
+        "direccion": "Av. Sabattini 1200",
+        "latitud": -32.4075,
+        "longitud": -63.2402,
+        "observaciones": "Zona peligrosa para motocicletas",
+        "fecha_hora": "2026-05-18T22:00:00.000Z"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

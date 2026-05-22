@@ -6,7 +6,14 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"
   },
-  "keywords": [],
+  "keywords": [
+    "urbanflow",
+    "express",
+    "mongodb",
+    "mongoose",
+    "smart-city",
+    "incidents"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
