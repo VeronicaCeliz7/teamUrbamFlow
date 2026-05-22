@@ -55,6 +55,8 @@ app.listen(PORT, () => {
     console.log(`   PUT    /api/users/profile`);
     console.log(`   DELETE /api/users/profile`);
     console.log(`   GET    /api/users (admin)`);
+    console.log(`   GET    /api/users/municipio/lista`);
+    console.log(`   POST   /api/users/municipio/invitar`);
     console.log(`   ──────── Reportes ────────`);
     console.log(`   POST   /api/reportes`);
     console.log(`   GET    /api/reportes`);

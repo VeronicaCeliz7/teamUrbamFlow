@@ -1,13 +1,10 @@
 {
   "name": "urbanflowbackend",
   "version": "1.0.0",
-  "description": "Backend UrbanFlow - API para gestion inteligente de incidentes urbanos",
-  "main": "server.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
-    "seed:demo": "node scripts/seedDemo.js",
-    "test": "echo \"No tests configured yet\" && exit 0"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
   },
   "keywords": [
     "urbanflow",
@@ -28,7 +25,15 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.6.1",
     "multer": "^2.1.1",
-    "multer-storage-cloudinary": "^4.0.0",
-    "openai": "^6.38.0"
-  }
+    "multer-storage-cloudinary": "^4.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VeronicaCeliz7/teamUrbamFlow.git"
+  },
+  "bugs": {
+    "url": "https://github.com/VeronicaCeliz7/teamUrbamFlow/issues"
+  },
+  "homepage": "https://github.com/VeronicaCeliz7/teamUrbamFlow#readme",
+  "description": ""
 }
