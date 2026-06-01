@@ -8,7 +8,16 @@ const ReporteSchema = new mongoose.Schema({
     // Relación demo / cliente
     clienteId: { type: mongoose.Schema.Types.ObjectId, ref: 'Cliente', default: null },
     clienteNombre: { type: String, default: null },
+    // Territorio / municipio responsable
+municipio: { type: String, default: '' },
 
+// Operador asignado
+operadorAsignadoId: { type: String, default: null },
+operadorAsignadoNombre: { type: String, default: null },
+    
+    // Operador asignado
+     operadorAsignadoId: { type: String, default: null },
+     operadorAsignadoNombre: { type: String, default: null },
     // Datos del reporte
     titulo: { type: String, required: true },
     columna_unica: { type: String, required: true },
@@ -71,5 +80,6 @@ ReporteSchema.index({ clienteId: 1 });
 ReporteSchema.index({ prioridad: 1 });
 ReporteSchema.index({ categoria_asignada_por_ia: 1 });
 ReporteSchema.index({ esDemo: 1 });
-
+ReporteSchema.index({ municipio: 1 });
+ReporteSchema.index({ operadorAsignadoId: 1 });
 module.exports = mongoose.model('Reporte', ReporteSchema);

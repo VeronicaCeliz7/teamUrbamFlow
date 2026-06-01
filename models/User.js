@@ -12,13 +12,13 @@ const UserSchema = new mongoose.Schema({
     localidad: { type: String },
     provincia: { type: String },
     pais: { type: String },
-
+    municipio: { type: String, default: '' },
     clienteId: { type: mongoose.Schema.Types.ObjectId, ref: 'Cliente', default: null },
     clienteNombre: { type: String, default: null },
 
     rol: {
         type: String,
-        enum: ['user', 'admin', 'moderador', 'operador', 'superadmin', 'ciudadano'],
+        enum: ['user', 'admin', 'moderador', 'operador', 'operator','superadmin', 'ciudadano'],
         default: 'user'
     },
 
@@ -39,5 +39,6 @@ const UserSchema = new mongoose.Schema({
 UserSchema.index({ rol: 1 });
 UserSchema.index({ clienteId: 1 });
 UserSchema.index({ esDemo: 1 });
+UserSchema.index({ municipio: 1 });
 
 module.exports = mongoose.model('User', UserSchema);

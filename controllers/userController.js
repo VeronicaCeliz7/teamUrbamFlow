@@ -4,8 +4,9 @@ const { createClerkClient } = require('@clerk/clerk-sdk-node');
 // Obtener o crear perfil del usuario autenticado
 const getProfile = async (req, res) => {
     try {
+        console.log('🔑 USER ID TOKEN:', req.auth.userId)
         let user = await User.findOne({ clerkUserId: req.auth.userId });
-        
+        console.log('👤 USER MONGO:', user)
         if (!user) {
             const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
             const clerkUser = await clerk.users.getUser(req.auth.userId);
@@ -151,40 +152,63 @@ const deleteUser = async (req, res) => {
 // Invitar usuario nuevo con rol de municipio (admin del municipio)
 const invitarUsuarioMunicipio = async (req, res) => {
   try {
-    const { email, nombre, apellido, role, municipio } = req.body
+    const { email, nombre, apellido = '', role, municipio } = req.body
 
     if (!email || !nombre || !role || !municipio) {
-      return res.status(400).json({ 
-        error: 'Faltan campos: email, nombre, role, municipio' 
+      return res.status(400).json({
+        error: 'Faltan campos: email, nombre, role, municipio'
       })
     }
 
-    if (!['operator', 'admin'].includes(role)) {
-      return res.status(400).json({ 
-        error: 'Rol inválido. Debe ser operator o admin' 
+    if (!['operator', 'operador', 'admin'].includes(role)) {
+      return res.status(400).json({
+        error: 'Rol inválido. Debe ser operator/operador o admin'
       })
     }
 
+    const rolMongo = role === 'operator' ? 'operador' : role
     const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
 
-    const usuario = await clerk.users.createUser({
+    const passwordTemporal =
+      'UrbanFlow2026!'
+
+    const usuarioClerk = await clerk.users.createUser({
       emailAddress: [email],
+      password: passwordTemporal,
       firstName: nombre,
-      lastName: apellido || '',
-      publicMetadata: { role, municipio }
+      lastName: apellido,
+      publicMetadata: { role: rolMongo, municipio }
     })
+
+    const usuarioMongo = await User.findOneAndUpdate(
+      { clerkUserId: usuarioClerk.id },
+      {
+        clerkUserId: usuarioClerk.id,
+        email,
+        nombre,
+        apellido,
+        rol: rolMongo,
+        municipio,
+        localidad: municipio,
+        activo: true,
+        ultimoAcceso: new Date(),
+        updatedAt: new Date()
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    )
 
     res.status(201).json({
       mensaje: 'Usuario creado exitosamente',
+      passwordTemporal,
       usuario: {
-        id: usuario.id,
-        email,
-        nombre: `${nombre} ${apellido || ''}`.trim(),
-        role,
-        municipio
+        id: usuarioMongo._id,
+        clerkUserId: usuarioClerk.id,
+        email: usuarioMongo.email,
+        nombre: `${usuarioMongo.nombre || ''} ${usuarioMongo.apellido || ''}`.trim(),
+        role: usuarioMongo.rol,
+        municipio: usuarioMongo.municipio
       }
     })
-
   } catch (error) {
     console.error('Error creando usuario municipio:', error)
     if (error.errors?.[0]?.code === 'form_identifier_exists') {
@@ -193,35 +217,37 @@ const invitarUsuarioMunicipio = async (req, res) => {
     res.status(500).json({ error: 'Error al crear el usuario' })
   }
 }
-
 // Listar usuarios de un municipio específico
 const listarUsuariosMunicipio = async (req, res) => {
   try {
     const { municipio } = req.query
 
-    const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
-    const response = await clerk.users.getUserList({ limit: 100 })
-
-    let usuarios = response.data.map(u => ({
-      id: u.id,
-      nombre: `${u.firstName || ''} ${u.lastName || ''}`.trim(),
-      email: u.emailAddresses[0]?.emailAddress || '',
-      role: u.publicMetadata?.role || 'citizen',
-      municipio: u.publicMetadata?.municipio || '',
-    }))
-
-    if (municipio) {
-      usuarios = usuarios.filter(u => u.municipio === municipio)
+    const filtro = {
+      activo: true,
+      rol: { $in: ['operador', 'operator', 'admin'] }
     }
 
-    res.json({ usuarios })
+    if (municipio) {
+      filtro.municipio = municipio
+    }
 
+    const usuariosMongo = await User.find(filtro).sort({ createdAt: -1 })
+
+    const usuarios = usuariosMongo.map(u => ({
+      id: u._id,
+      clerkUserId: u.clerkUserId,
+      nombre: `${u.nombre || ''} ${u.apellido || ''}`.trim(),
+      email: u.email || '',
+      role: u.rol === 'operator' ? 'operador' : u.rol,
+      municipio: u.municipio || u.localidad || ''
+    }))
+
+    res.json({ usuarios })
   } catch (error) {
     console.error('Error listando usuarios municipio:', error)
     res.status(500).json({ error: 'Error al listar usuarios' })
   }
 }
-
 module.exports = {
     getProfile,
     updateProfile,

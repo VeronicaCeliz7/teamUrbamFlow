@@ -26,7 +26,28 @@ const ensureUserExists = async (clerkUserId) => {
     
     return user;
 };
+const detectarMunicipioPorCoordenadas = (lat, lng) => {
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
 
+    const villaMaria = {
+        minLat: -32.45,
+        maxLat: -32.35,
+        minLng: -63.32,
+        maxLng: -63.18
+    };
+
+    if (
+        latNum >= villaMaria.minLat &&
+        latNum <= villaMaria.maxLat &&
+        lngNum >= villaMaria.minLng &&
+        lngNum <= villaMaria.maxLng
+    ) {
+        return 'villa-maria';
+    }
+
+    return 'sin-municipio';
+};
 // Crear nuevo reporte
 const createReporte = async (req, res) => {
     try {
@@ -60,9 +81,9 @@ const createReporte = async (req, res) => {
             observaciones, 
             archivo_url,
             archivo_public_id,
-            archivo_tipo
-        } = req.body;
-
+            archivo_tipo,
+            municipio
+            } = req.body;
         // fecha_hora NO se desestructura, se usa directamente de req.body o se genera
         const fecha_hora = req.body.fecha_hora; // puede ser undefined
 
@@ -75,6 +96,10 @@ const createReporte = async (req, res) => {
             direccion: direccion.trim(),
             latitud: latitud !== undefined && latitud !== null ? Number(latitud) : 0,
             longitud: longitud !== undefined && longitud !== null ? Number(longitud) : 0,
+            municipio: municipio || detectarMunicipioPorCoordenadas(latitud, longitud),
+            operadorAsignadoId: null,
+            operadorAsignadoNombre: null,
+            estado: 'pendiente',
             observaciones: observaciones ? observaciones.trim() : '',
             fecha_hora: fecha_hora ? new Date(fecha_hora) : new Date(),
             archivo_url: archivo_url || undefined,
@@ -134,12 +159,17 @@ const createReporte = async (req, res) => {
 // Obtener todos los reportes (con filtros opcionales)
 const getReportes = async (req, res) => {
     try {
-        const { estado, categoria, lat, lng, radio } = req.query;
+        const { estado, categoria, lat, lng, radio, municipio, operadorId, sinAsignar } = req.query;
         let filtro = {};
+      if (estado) filtro.estado = estado;
+      if (categoria) filtro.categoria_asignada_por_ia = categoria;
+      if (municipio) filtro.municipio = municipio;
+      if (operadorId) filtro.operadorAsignadoId = operadorId;
 
-        if (estado) filtro.estado = estado;
-        if (categoria) filtro.categoria_asignada_por_ia = categoria;
-
+       if (sinAsignar === 'true') {
+    filtro.operadorAsignadoId = null;
+     }
+        
         if (lat && lng && radio) {
             filtro = {
                 ...filtro,
@@ -193,11 +223,23 @@ const getMisReportes = async (req, res) => {
 
 // Actualizar reporte
 const updateReporte = async (req, res) => {
+    console.log('🚀 ENTRE A UPDATE REPORTE')
+    console.log('ID:', req.params.id)
+    console.log('BODY:', req.body)
+
     try {
         const { id } = req.params;
-        const { estado, observaciones } = req.body;
+        const {
+          estado,
+         observaciones,
+         operadorAsignadoId,
+         operadorAsignadoNombre
+        } = req.body;
 
         const reporte = await Reporte.findById(id);
+        console.log('📄 REPORTE ENCONTRADO:')
+        console.log(reporte)
+
         if (!reporte) {
             return res.status(404).json({ error: 'Reporte no encontrado' });
         }
@@ -207,15 +249,31 @@ const updateReporte = async (req, res) => {
             return res.status(403).json({ error: 'No autorizado para modificar este reporte' });
         }
 
-        if (estado) reporte.estado = estado;
+        if (estado) {reporte.estado = estado;
+
+         console.log('📝 NUEVO ESTADO:', reporte.estado)
+        }
+
         if (observaciones) reporte.observaciones = observaciones;
         reporte.updatedAt = Date.now();
 
+        if (operadorAsignadoId !== undefined) {
+        reporte.operadorAsignadoId = operadorAsignadoId;
+        }
+
+        if (operadorAsignadoNombre !== undefined) {
+     reporte.operadorAsignadoNombre = operadorAsignadoNombre;
+    }
+
         await reporte.save();
+        console.log('✅ REPORTE GUARDADO:')
+        console.log(reporte)
+
 
         res.json({ success: true, message: 'Reporte actualizado', data: reporte });
     } catch (error) {
-        console.error('Error al actualizar reporte:', error);
+        console.error('🔴 ERROR UPDATE REPORTE')
+        console.error(error)
         res.status(500).json({ error: 'Error al actualizar reporte' });
     }
 };
@@ -250,6 +308,47 @@ const deleteReporte = async (req, res) => {
     } catch (error) {
         console.error('Error al eliminar reporte:', error);
         res.status(500).json({ error: 'Error al eliminar reporte' });
+    }
+};
+const tomarReporte = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const operador = await ensureUserExists(req.auth.userId);
+
+        const reporte = await Reporte.findById(id);
+
+        if (!reporte) {
+            return res.status(404).json({ error: 'Reporte no encontrado' });
+        }
+
+        if (reporte.operadorAsignadoId) {
+            return res.status(400).json({
+                error: 'Este incidente ya fue tomado por otro operador'
+            });
+        }
+
+        if (reporte.municipio !== operador.municipio) {
+            return res.status(403).json({
+                error: 'No podés tomar incidentes de otro municipio'
+            });
+        }
+
+        reporte.operadorAsignadoId = operador.clerkUserId;
+        reporte.operadorAsignadoNombre = `${operador.nombre || ''} ${operador.apellido || ''}`.trim();
+        reporte.estado = 'en_proceso';
+        reporte.updatedAt = Date.now();
+
+        await reporte.save();
+
+        res.json({
+            success: true,
+            message: 'Incidente tomado correctamente',
+            data: reporte
+        });
+    } catch (error) {
+        console.error('Error tomando reporte:', error);
+        res.status(500).json({ error: 'Error al tomar incidente' });
     }
 };
 
@@ -287,5 +386,6 @@ module.exports = {
     getMisReportes,
     updateReporte,
     deleteReporte,
+    tomarReporte,
     updateCategoriaIA
 };
