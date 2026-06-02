@@ -9,14 +9,15 @@ router.get('/profile', authMiddleware, userController.getProfile);
 router.put('/profile', authMiddleware, userController.updateProfile);
 router.delete('/profile', authMiddleware, userController.deleteProfile);
 
+// Rutas del municipio
+router.get('/municipio/lista', authMiddleware, userController.listarUsuariosMunicipio)
+router.post('/municipio/invitar', authMiddleware, userController.invitarUsuarioMunicipio)
+
 // Rutas de admin
 router.get('/', authMiddleware, adminMiddleware, userController.getAllUsers);
 router.get('/:id', authMiddleware, adminMiddleware, userController.getUserById);
 router.put('/:id/role', authMiddleware, adminMiddleware, userController.updateUserRole);
 router.delete('/:id', authMiddleware, adminMiddleware, userController.deleteUser);
-// Rutas del municipio
-router.get('/municipio/lista', authMiddleware, userController.listarUsuariosMunicipio)
-router.post('/municipio/invitar', authMiddleware, userController.invitarUsuarioMunicipio)
 
 
 module.exports = router;

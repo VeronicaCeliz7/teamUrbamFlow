@@ -48,7 +48,8 @@ const authMiddleware = async (req, res, next) => {
             
             // Guardar el usuario en req para usarlo en los controladores
             req.user = user;
-            
+            console.log('👤 USUARIO LOGUEADO');
+            console.log(user);
             // 🍪 NUEVO: Generar cookie propia (urbanflow_session)
             // Esta cookie contendrá la información del usuario
             const sessionToken = jwt.sign(
