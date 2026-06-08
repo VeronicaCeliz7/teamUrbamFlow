@@ -100,6 +100,15 @@ const createReporte = async (req, res) => {
             operadorAsignadoId: null,
             operadorAsignadoNombre: null,
             estado: 'pendiente',
+            historialEstados: [
+            {
+                 estado: 'pendiente',
+                 fecha: new Date(),
+                 usuarioId: req.auth.userId,
+                 usuarioNombre: user.email,
+                observacion: 'Incidente reportado por ciudadano'
+            }
+            ],
             observaciones: observaciones ? observaciones.trim() : '',
             fecha_hora: fecha_hora ? new Date(fecha_hora) : new Date(),
             archivo_url: archivo_url || undefined,
@@ -159,38 +168,116 @@ const createReporte = async (req, res) => {
 // Obtener todos los reportes (con filtros opcionales)
 const getReportes = async (req, res) => {
     try {
-        const { estado, categoria, lat, lng, radio, municipio, operadorId, sinAsignar } = req.query;
-        let filtro = {};
-      if (estado) filtro.estado = estado;
-      if (categoria) filtro.categoria_asignada_por_ia = categoria;
-      if (municipio) filtro.municipio = municipio;
-      if (operadorId) filtro.operadorAsignadoId = operadorId;
+        const {
+            estado,
+            categoria,
+            prioridad,
+            lat,
+            lng,
+            radio,
+            municipio,
+            localidad,
+            operadorId,
+            sinAsignar
+        } = req.query;
 
-       if (sinAsignar === 'true') {
-    filtro.operadorAsignadoId = null;
-     }
-        
-        if (lat && lng && radio) {
-            filtro = {
-                ...filtro,
-                latitud: { $exists: true, $ne: 0 },
-                longitud: { $exists: true, $ne: 0 }
-            };
+        let filtro = {};
+
+        if (estado) {
+            filtro.estado = estado;
         }
 
+        if (prioridad) {
+            filtro.prioridad = prioridad;
+        }
+
+        if (categoria) {
+            const categoriaRegex = new RegExp(
+                categoria.toString().trim().replace(/[-_\s]+/g, '[-_\\s]*'),
+                'i'
+            );
+
+            filtro.$or = [
+                { categoria_asignada_por_ia: categoriaRegex },
+                { categoria: categoriaRegex },
+                { etiquetas: categoriaRegex }
+            ];
+        }
+
+        if (operadorId) {
+            filtro.operadorAsignadoId = operadorId;
+        }
+
+        if (sinAsignar === 'true') {
+            filtro.operadorAsignadoId = null;
+        }
+
+        const territorio = municipio || localidad;
+
+        if (territorio) {
+            const territorioNormalizado = territorio
+                .toString()
+                .trim()
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[-_\s]+/g, '-');
+
+            const territorioRegex = new RegExp(
+                territorioNormalizado.replace(/-/g, '[-_\\s]*'),
+                'i'
+            );
+
+            const condicionesTerritorio = [
+                { municipio: territorioRegex },
+                { localidad: territorioRegex },
+                { direccion: territorioRegex }
+            ];
+
+            if (territorioNormalizado === 'villa-maria') {
+                condicionesTerritorio.push({
+                    latitud: { $gte: -32.45, $lte: -32.35 },
+                    longitud: { $gte: -63.32, $lte: -63.18 }
+                });
+            }
+
+            if (filtro.$or) {
+                filtro.$and = [
+                    { $or: filtro.$or },
+                    { $or: condicionesTerritorio }
+                ];
+                delete filtro.$or;
+            } else {
+                filtro.$or = condicionesTerritorio;
+            }
+        }
+
+        if (lat && lng && radio) {
+            filtro.latitud = { $exists: true, $ne: 0 };
+            filtro.longitud = { $exists: true, $ne: 0 };
+        }
+
+        console.log('🔎 FILTRO REPORTES:', JSON.stringify(filtro, null, 2));
+
         const reportes = await Reporte.find(filtro).sort({ createdAt: -1 });
-        
-        res.json({ 
-            success: true, 
+
+        console.log(`✅ Reportes encontrados: ${reportes.length}`);
+
+        res.json({
+            success: true,
             count: reportes.length,
-            data: reportes 
+            data: reportes
         });
+
     } catch (error) {
         console.error('Error al obtener reportes:', error);
-        res.status(500).json({ error: 'Error al obtener reportes' });
-    }
-};
 
+        res.status(500).json({
+            error: 'Error al obtener reportes',
+            mensaje: error.message
+        });
+    }
+    };
 // Obtener un reporte por ID
 const getReporteById = async (req, res) => {
     try {
@@ -249,10 +336,23 @@ const updateReporte = async (req, res) => {
             return res.status(403).json({ error: 'No autorizado para modificar este reporte' });
         }
 
-        if (estado) {reporte.estado = estado;
+        if (estado && estado !== reporte.estado) {
+
+            reporte.historialEstados.push({
+               estado,
+               fecha: new Date(),
+               usuarioId: req.auth.userId,
+               usuarioNombre:
+                 `${user?.nombre || ''} ${user?.apellido || ''}`.trim(),
+               observacion:
+                  observaciones || `Cambio de estado a ${estado}`
+        });
+
+        reporte.estado = estado;
+} 
 
          console.log('📝 NUEVO ESTADO:', reporte.estado)
-        }
+        
 
         if (observaciones) reporte.observaciones = observaciones;
         reporte.updatedAt = Date.now();
@@ -264,6 +364,9 @@ const updateReporte = async (req, res) => {
         if (operadorAsignadoNombre !== undefined) {
      reporte.operadorAsignadoNombre = operadorAsignadoNombre;
     }
+        if (!reporte.historialEstados) {
+            reporte.historialEstados = [];
+        }
 
         await reporte.save();
         console.log('✅ REPORTE GUARDADO:')
@@ -337,6 +440,13 @@ const tomarReporte = async (req, res) => {
         reporte.operadorAsignadoId = operador.clerkUserId;
         reporte.operadorAsignadoNombre = `${operador.nombre || ''} ${operador.apellido || ''}`.trim();
         reporte.estado = 'en_proceso';
+        reporte.historialEstados.push({
+             estado: 'en_proceso',
+             fecha: new Date(),
+             usuarioId: operador.clerkUserId,
+             usuarioNombre: reporte.operadorAsignadoNombre,
+             observacion: 'Incidente tomado por operador'
+    });
         reporte.updatedAt = Date.now();
 
         await reporte.save();
