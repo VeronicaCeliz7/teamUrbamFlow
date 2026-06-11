@@ -86,4 +86,9 @@ app.listen(PORT, () => {
 
     console.log(`   ──────── IA ────────`);
     console.log(`   POST   /api/ia/clasificar`);
+    console.log(`   POST   /api/ia/reclasificar`);
+    console.log(`   POST   /api/ia/vectorizar`);
+    console.log(`   POST   /api/ia/vectorizar-pendientes`);
+    console.log(`   POST   /api/ia/similares`);
+    console.log(`   GET    /api/ia/heatmap`);
 });

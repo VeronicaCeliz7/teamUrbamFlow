@@ -1,0 +1,18 @@
+info:
+  name: GET Heatmap IA
+  type: http
+  seq: 7
+
+http:
+  method: GET
+  url: http://localhost:3001/api/ia/heatmap
+  headers:
+    - name: Content-Type
+      value: application/json
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
