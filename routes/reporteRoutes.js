@@ -7,6 +7,7 @@ const reporteController = require('../controllers/reporteController');
 // Rutas protegidas (requieren autenticación)
 router.post('/', authMiddleware, reporteController.createReporte);
 router.get('/mis-reportes', authMiddleware, reporteController.getMisReportes);
+router.put('/:id/tomar', authMiddleware, reporteController.tomarReporte);
 router.get('/:id', authMiddleware, reporteController.getReporteById);
 router.put('/:id', authMiddleware, reporteController.updateReporte);
 router.delete('/:id', authMiddleware, reporteController.deleteReporte);
