@@ -2,6 +2,7 @@ const Reporte = require('../models/Reporte');
 const User = require('../models/User');
 const cloudinary = require('../config/cloudinary');
 const { createClerkClient } = require('@clerk/clerk-sdk-node');
+const { procesarIAReporte } = require('./iaController');
 
 // Función auxiliar para asegurar que el usuario existe en MongoDB
 const ensureUserExists = async (clerkUserId) => {
@@ -122,7 +123,14 @@ const createReporte = async (req, res) => {
 
         console.log('💾 Guardando en MongoDB...');
         await reporte.save();
-        
+        try {
+            console.log('🤖 Procesando reporte con IA Gemini...');
+            const resultadoIA = await procesarIAReporte(reporte);
+            console.log('✅ IA procesada:', JSON.stringify(resultadoIA, null, 2));
+        } catch (iaError) {
+            console.error('⚠️ Error IA no bloqueante:', iaError.message);
+        }
+
         console.log(`✅ Reporte creado ID: ${reporte._id} por usuario: ${user.email}`);
         console.log('🚨 ========== FIN CREATE REPORTE ==========\n');
 

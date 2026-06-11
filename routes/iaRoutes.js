@@ -14,6 +14,7 @@ const {
 } = require('../controllers/embeddingController');
 
 router.post('/clasificar', clasificarIncidente);
+router.post('/duplicado', detectarDuplicado);
 
 router.post('/reclasificar', reclasificarIncidentes);
 

@@ -7,24 +7,17 @@ const deepseek = new OpenAI({
 });
 
 const categoriasPermitidas = [
-    'bache',
-    'alumbrado',
-    'basura',
-    'agua',
-    'semaforo',
-    'inseguridad',
-    'vereda',
-    'ruido',
-    'animal_suelto',
-    'microbasural',
-    'otro'
-];
-
-const prioridadesPermitidas = [
-    'baja',
-    'media',
-    'alta',
-    'critica'
+  'bache',
+  'alumbrado',
+  'basura',
+  'agua',
+  'semaforo',
+  'inseguridad',
+  'vereda',
+  'ruido',
+  'animal_suelto',
+  'microbasural',
+  'otro'
 ];
 
 function normalizarTexto(texto) {
@@ -66,18 +59,8 @@ function clasificacionFallback(texto, motivo = 'fallback-demo') {
         etiquetas.push('agua', 'fuga', 'servicio-publico');
     }
 
-    if (
-        textoNormalizado.includes('bache') ||
-        textoNormalizado.includes('pozo') ||
-        textoNormalizado.includes('calle rota') ||
-        textoNormalizado.includes('calzada')
-    ) {
-        categoria = 'bache';
-        prioridad = prioridad === 'alta' ? 'critica' : 'alta';
-        riesgo = 'riesgo vial';
-        accion_sugerida = 'Priorizar reparación vial y señalizar preventivamente la zona.';
-        etiquetas.push('bache', 'seguridad-vial', 'calzada');
-    }
+  const dLat = (Number(lat2) - Number(lat1)) * rad;
+  const dLon = (Number(lon2) - Number(lon1)) * rad;
 
     if (
         textoNormalizado.includes('basura') ||
@@ -111,16 +94,9 @@ function clasificacionFallback(texto, motivo = 'fallback-demo') {
         etiquetas.push('alumbrado', 'luminaria', 'seguridad');
     }
 
-    if (
-        textoNormalizado.includes('semaforo') ||
-        textoNormalizado.includes('semáforo')
-    ) {
-        categoria = 'semaforo';
-        prioridad = 'critica';
-        riesgo = 'riesgo vial alto';
-        accion_sugerida = 'Intervenir de forma urgente por riesgo de siniestros viales.';
-        etiquetas.push('semaforo', 'transito', 'urgente');
-    }
+function similitudTexto(a = '', b = '') {
+  const palabrasA = new Set(normalizarTexto(a).split(' ').filter(Boolean));
+  const palabrasB = new Set(normalizarTexto(b).split(' ').filter(Boolean));
 
     if (
         textoNormalizado.includes('perro') ||
@@ -181,7 +157,8 @@ function clasificacionFallback(texto, motivo = 'fallback-demo') {
         etiquetas.push('zona-sensible');
     }
 
-    const etiquetasUnicas = [...new Set(etiquetas)];
+  const interseccion = [...palabrasA].filter((p) => palabrasB.has(p)).length;
+  const union = new Set([...palabrasA, ...palabrasB]).size;
 
     return {
         ok: true,
@@ -225,11 +202,10 @@ async function clasificarTextoUrbanFlow(texto) {
         return clasificacionFallback(texto, 'fallback-demo-sin-api-key');
     }
 
-    try {
-        const prompt = `
+  const prompt = `
 Sos el motor de inteligencia urbana de UrbanFlow.
 
-Tu tarea es clasificar incidentes urbanos reportados por ciudadanos.
+Clasificá el siguiente incidente urbano reportado por un ciudadano.
 
 Categorías permitidas:
 ${categoriasPermitidas.join(', ')}
@@ -237,19 +213,23 @@ ${categoriasPermitidas.join(', ')}
 Prioridades permitidas:
 ${prioridadesPermitidas.join(', ')}
 
-Analizá el siguiente incidente:
-"${texto}"
+Reglas:
+- Todos los incidentes ingresan inicialmente como baja prioridad, pero podés elevarlos si hay riesgo real.
+- Priorizá seguridad vial, escuelas, hospitales, semáforos, agua, riesgo sanitario e inseguridad.
+- Respondé SOLO JSON válido. Sin markdown. Sin explicación externa.
 
-Respondé SOLO en JSON válido, sin markdown, sin explicación adicional.
+Incidente:
+"${texto}"
 
 Formato obligatorio:
 {
   "categoria": "una_categoria_permitida",
-  "prioridad": "una_prioridad_permitida",
-  "resumen": "resumen claro y breve del incidente",
+  "prioridad": "baja|media|alta|critica",
+  "resumen": "resumen claro de máximo 160 caracteres",
   "etiquetas": ["etiqueta1", "etiqueta2", "etiqueta3"],
   "riesgo": "riesgo operativo principal",
-  "accion_sugerida": "acción recomendada para el gestor"
+  "accion_sugerida": "acción recomendada para el municipio",
+  "ai_priority_score": 0
 }
 `;
 
@@ -274,8 +254,39 @@ Formato obligatorio:
         if (!rawContent) {
             return clasificacionFallback(texto, 'fallback-demo-respuesta-vacia');
         }
+      ],
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 700
+      }
+    })
+  });
 
-        let ia;
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Gemini API error:', errorText);
+    return clasificacionFallback(texto, 'fallback-error-gemini');
+  }
+
+  const data = await response.json();
+  const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  if (!raw) {
+    return clasificacionFallback(texto, 'fallback-respuesta-vacia-gemini');
+  }
+
+  try {
+    const limpio = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+    const json = JSON.parse(limpio);
+    return normalizarRespuestaIA(json, texto);
+  } catch (error) {
+    console.error('Gemini JSON inválido:', raw);
+    return clasificacionFallback(texto, 'fallback-json-invalido-gemini');
+  }
+}
+
+async function detectarDuplicadoReporte(reporte, iaResultado) {
+  const radioMetros = Number(process.env.IA_DUPLICADO_RADIO_METROS || 20);
 
         try {
             ia = JSON.parse(rawContent);
@@ -396,6 +407,56 @@ const reclasificarIncidentes = async (req, res) => {
             error: error.message
         });
     }
+
+    const ia = await llamarGemini(texto);
+
+    return res.json({
+      ok: true,
+      proveedor: ia.proveedor,
+      modelo: ia.modelo,
+      input: { texto },
+      ia
+    });
+  } catch (error) {
+    console.error('Error en clasificarIncidente:', error);
+
+    return res.status(200).json({
+      ok: true,
+      ...clasificacionFallback(req.body?.texto || '', 'fallback-error-controlado'),
+      error_api: error.message
+    });
+  }
+};
+
+const detectarDuplicado = async (req, res) => {
+  try {
+    const { titulo, columna_unica, latitud, longitud, categoria } = req.body;
+
+    const reporteTemporal = {
+      _id: null,
+      titulo: titulo || '',
+      columna_unica: columna_unica || '',
+      latitud,
+      longitud
+    };
+
+    const resultado = await detectarDuplicadoReporte(reporteTemporal, {
+      categoria: categoria || null
+    });
+
+    return res.json({
+      ok: true,
+      radio_metros: Number(process.env.IA_DUPLICADO_RADIO_METROS || 20),
+      resultado
+    });
+  } catch (error) {
+    console.error('Error en detectarDuplicado:', error);
+    return res.status(500).json({
+      ok: false,
+      mensaje: 'Error al detectar duplicados',
+      error: error.message
+    });
+  }
 };
 
 module.exports = {
