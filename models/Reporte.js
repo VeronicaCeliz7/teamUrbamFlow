@@ -83,15 +83,55 @@ const ReporteSchema = new mongoose.Schema({
 
   etiquetas: [{ type: String }],
 
-  ai_summary: { type: String, default: null },
-  ai_priority_score: { type: Number, default: null },
+  ai_summary: {
+  type: String,
+  default: ''
+},
 
-  posible_duplicado: { type: Boolean, default: false },
-  reporte_duplicado_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Reporte',
-    default: null
-  },
+proveedor_ia: {
+  type: String,
+  default: ''
+},
+
+modelo_ia: {
+  type: String,
+  default: ''
+},
+
+ai_priority_score: {
+  type: Number,
+  default: 0
+},
+
+posible_duplicado: {
+  type: Boolean,
+  default: false
+},
+
+reporte_duplicado_id: {
+  type: String,
+  default: null
+},
+
+duplicado_score: {
+  type: Number,
+  default: 0
+},
+
+duplicado_distancia_metros: {
+  type: Number,
+  default: null
+},
+
+vectorizado: {
+  type: Boolean,
+  default: false
+},
+
+vector_modelo: {
+  type: String,
+  default: null
+},
 
   // Estado actual del reporte
   estado: {
