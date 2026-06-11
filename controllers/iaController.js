@@ -1,4 +1,5 @@
 const OpenAI = require('openai');
+const Reporte = require('../models/Reporte');
 
 const deepseek = new OpenAI({
     apiKey: process.env.DEEPSEEK_API_KEY,
@@ -27,10 +28,18 @@ const prioridadesPermitidas = [
 ];
 
 function normalizarTexto(texto) {
-    return texto
+    return String(texto || '')
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '');
+}
+
+function scorePrioridad(prioridad) {
+    if (prioridad === 'critica') return 95;
+    if (prioridad === 'alta') return 78;
+    if (prioridad === 'media') return 55;
+    if (prioridad === 'baja') return 30;
+    return 25;
 }
 
 function clasificacionFallback(texto, motivo = 'fallback-demo') {
@@ -45,6 +54,7 @@ function clasificacionFallback(texto, motivo = 'fallback-demo') {
     if (
         textoNormalizado.includes('agua') ||
         textoNormalizado.includes('perdida') ||
+        textoNormalizado.includes('pérdida') ||
         textoNormalizado.includes('fuga') ||
         textoNormalizado.includes('caño') ||
         textoNormalizado.includes('cano')
@@ -73,10 +83,14 @@ function clasificacionFallback(texto, motivo = 'fallback-demo') {
         textoNormalizado.includes('basura') ||
         textoNormalizado.includes('residuos') ||
         textoNormalizado.includes('olor') ||
-        textoNormalizado.includes('microbasural')
+        textoNormalizado.includes('basural') ||
+        textoNormalizado.includes('microbasural') ||
+        textoNormalizado.includes('contenedor')
     ) {
-        categoria = textoNormalizado.includes('microbasural') ? 'microbasural' : 'basura';
-        prioridad = 'media';
+        categoria = textoNormalizado.includes('microbasural') || textoNormalizado.includes('basural')
+            ? 'microbasural'
+            : 'basura';
+        prioridad = prioridad === 'critica' ? 'critica' : 'media';
         riesgo = 'riesgo sanitario';
         accion_sugerida = 'Derivar a higiene urbana para retiro y control del foco.';
         etiquetas.push('basura', 'higiene-urbana', 'riesgo-sanitario');
@@ -86,10 +100,12 @@ function clasificacionFallback(texto, motivo = 'fallback-demo') {
         textoNormalizado.includes('luz') ||
         textoNormalizado.includes('alumbrado') ||
         textoNormalizado.includes('lampara') ||
-        textoNormalizado.includes('luminaria')
+        textoNormalizado.includes('lámpara') ||
+        textoNormalizado.includes('luminaria') ||
+        textoNormalizado.includes('farola')
     ) {
         categoria = 'alumbrado';
-        prioridad = 'media';
+        prioridad = prioridad === 'critica' ? 'critica' : 'media';
         riesgo = 'baja visibilidad y percepción de inseguridad';
         accion_sugerida = 'Derivar al área de alumbrado público para revisión técnica.';
         etiquetas.push('alumbrado', 'luminaria', 'seguridad');
@@ -104,6 +120,55 @@ function clasificacionFallback(texto, motivo = 'fallback-demo') {
         riesgo = 'riesgo vial alto';
         accion_sugerida = 'Intervenir de forma urgente por riesgo de siniestros viales.';
         etiquetas.push('semaforo', 'transito', 'urgente');
+    }
+
+    if (
+        textoNormalizado.includes('perro') ||
+        textoNormalizado.includes('animal') ||
+        textoNormalizado.includes('caballo')
+    ) {
+        categoria = 'animal_suelto';
+        prioridad = prioridad === 'media' ? 'alta' : prioridad;
+        riesgo = 'riesgo para peatones, ciclistas y tránsito';
+        accion_sugerida = 'Derivar a zoonosis o control animal.';
+        etiquetas.push('animal-suelto', 'seguridad');
+    }
+
+    if (
+        textoNormalizado.includes('ruido') ||
+        textoNormalizado.includes('musica') ||
+        textoNormalizado.includes('música') ||
+        textoNormalizado.includes('sonora')
+    ) {
+        categoria = 'ruido';
+        prioridad = 'media';
+        riesgo = 'afectación de convivencia urbana';
+        accion_sugerida = 'Derivar al área de inspección o convivencia ciudadana.';
+        etiquetas.push('ruido', 'convivencia');
+    }
+
+    if (
+        textoNormalizado.includes('vereda') ||
+        textoNormalizado.includes('baldosa') ||
+        textoNormalizado.includes('peatonal')
+    ) {
+        categoria = 'vereda';
+        prioridad = prioridad === 'media' ? 'alta' : prioridad;
+        riesgo = 'riesgo de caída peatonal';
+        accion_sugerida = 'Derivar al área de obras públicas.';
+        etiquetas.push('vereda', 'peatonal');
+    }
+
+    if (
+        textoNormalizado.includes('inseguridad') ||
+        textoNormalizado.includes('sospechoso') ||
+        textoNormalizado.includes('visibilidad')
+    ) {
+        categoria = 'inseguridad';
+        prioridad = prioridad === 'media' ? 'alta' : prioridad;
+        riesgo = 'percepción de inseguridad o riesgo ciudadano';
+        accion_sugerida = 'Derivar al área de seguridad ciudadana.';
+        etiquetas.push('seguridad', 'prevencion');
     }
 
     if (
@@ -122,18 +187,15 @@ function clasificacionFallback(texto, motivo = 'fallback-demo') {
         ok: true,
         proveedor: motivo,
         modelo: 'fallback-local-urbanflow',
-        advertencia:
-            'La clasificación fue generada por reglas locales porque la API externa de IA no respondió correctamente.',
-        input: {
-            texto
-        },
+        input: { texto },
         ia: {
             categoria,
             prioridad,
             resumen: `Incidente clasificado como ${categoria} con prioridad ${prioridad}.`,
             etiquetas: etiquetasUnicas.length > 0 ? etiquetasUnicas : ['revision-manual'],
             riesgo,
-            accion_sugerida
+            accion_sugerida,
+            ai_priority_score: scorePrioridad(prioridad)
         }
     };
 }
@@ -150,27 +212,17 @@ function normalizarRespuestaIA(ia) {
     return {
         categoria,
         prioridad,
-        resumen: ia.resumen || 'Resumen no disponible.',
+        resumen: ia.resumen || `Incidente clasificado como ${categoria}.`,
         etiquetas: Array.isArray(ia.etiquetas) ? ia.etiquetas : [],
         riesgo: ia.riesgo || 'No determinado',
-        accion_sugerida: ia.accion_sugerida || 'Revisión manual del incidente.'
+        accion_sugerida: ia.accion_sugerida || 'Revisión manual del incidente.',
+        ai_priority_score: scorePrioridad(prioridad)
     };
 }
 
-const clasificarIncidente = async (req, res) => {
-    const { texto } = req.body;
-
-    if (!texto || texto.trim().length < 5) {
-        return res.status(400).json({
-            ok: false,
-            mensaje: 'Debe enviar un texto válido para clasificar.'
-        });
-    }
-
+async function clasificarTextoUrbanFlow(texto) {
     if (!process.env.DEEPSEEK_API_KEY) {
-        return res.status(200).json(
-            clasificacionFallback(texto, 'fallback-demo-sin-api-key')
-        );
+        return clasificacionFallback(texto, 'fallback-demo-sin-api-key');
     }
 
     try {
@@ -220,9 +272,7 @@ Formato obligatorio:
         const rawContent = completion.choices?.[0]?.message?.content;
 
         if (!rawContent) {
-            return res.status(200).json(
-                clasificacionFallback(texto, 'fallback-demo-respuesta-vacia')
-            );
+            return clasificacionFallback(texto, 'fallback-demo-respuesta-vacia');
         }
 
         let ia;
@@ -230,28 +280,126 @@ Formato obligatorio:
         try {
             ia = JSON.parse(rawContent);
         } catch {
-            return res.status(200).json(
-                clasificacionFallback(texto, 'fallback-demo-json-invalido')
-            );
+            return clasificacionFallback(texto, 'fallback-demo-json-invalido');
+        }
+
+        return {
+            ok: true,
+            proveedor: 'DeepSeek',
+            modelo: 'deepseek-chat',
+            input: { texto },
+            ia: normalizarRespuestaIA(ia)
+        };
+    } catch (error) {
+        return {
+            ...clasificacionFallback(texto, 'fallback-demo-error-api'),
+            error_api: error.message
+        };
+    }
+}
+
+const clasificarIncidente = async (req, res) => {
+    const { texto } = req.body;
+
+    if (!texto || texto.trim().length < 5) {
+        return res.status(400).json({
+            ok: false,
+            mensaje: 'Debe enviar un texto válido para clasificar.'
+        });
+    }
+
+    const resultado = await clasificarTextoUrbanFlow(texto);
+    return res.json(resultado);
+};
+
+const reclasificarIncidentes = async (req, res) => {
+    try {
+        const limite = Number(req.body?.limite || 100);
+
+        const reportes = await Reporte.find({
+            $or: [
+                { categoria_asignada_por_ia: { $exists: false } },
+                { categoria_asignada_por_ia: null },
+                { categoria_asignada_por_ia: '' },
+                { categoria_asignada_por_ia: 'sin_categoria' },
+                { categoria_asignada_por_ia: 'Sin Categoría' }
+            ]
+        })
+            .sort({ createdAt: -1 })
+            .limit(limite);
+
+        const resultados = [];
+        const errores = [];
+
+        for (const reporte of reportes) {
+            try {
+                const texto = [
+                    `Título: ${reporte.titulo || ''}`,
+                    `Descripción: ${reporte.columna_unica || ''}`,
+                    `Dirección: ${reporte.direccion || ''}`,
+                    `Municipio: ${reporte.municipio || ''}`
+                ].join('\n');
+
+                const resultadoIA = await clasificarTextoUrbanFlow(texto);
+                const ia = resultadoIA.ia;
+
+                reporte.categoria_asignada_por_ia = ia.categoria;
+                reporte.prioridad = ia.prioridad;
+                reporte.etiquetas = ia.etiquetas || [];
+                reporte.ai_summary = ia.resumen;
+                reporte.ai_priority_score = ia.ai_priority_score || scorePrioridad(ia.prioridad);
+                reporte.ia_procesado = true;
+                reporte.proveedor_ia = resultadoIA.proveedor || 'fallback-local';
+                reporte.modelo_ia = resultadoIA.modelo || 'fallback-local-urbanflow';
+
+                // Como cambia la clasificación, invalidamos embedding para regenerarlo actualizado
+                reporte.vectorizado = false;
+                reporte.vector_modelo = null;
+                reporte.embedding = [];
+                reporte.embedding_dimensiones = 0;
+                reporte.embedding_actualizado_en = null;
+
+                await reporte.save();
+
+                resultados.push({
+                    id: reporte._id,
+                    titulo: reporte.titulo,
+                    categoria: reporte.categoria_asignada_por_ia,
+                    prioridad: reporte.prioridad,
+                    score: reporte.ai_priority_score,
+                    vectorizado: reporte.vectorizado
+                });
+            } catch (error) {
+                errores.push({
+                    id: reporte._id,
+                    titulo: reporte.titulo,
+                    error: error.message
+                });
+            }
         }
 
         return res.json({
             ok: true,
-            proveedor: 'DeepSeek',
-            modelo: 'deepseek-chat',
-            input: {
-                texto
-            },
-            ia: normalizarRespuestaIA(ia)
+            encontrados: reportes.length,
+            procesados: resultados.length,
+            errores: errores.length,
+            mensaje: 'Reclasificación finalizada. Ejecutar luego /api/ia/vectorizar-pendientes para regenerar embeddings actualizados.',
+            resultados,
+            errores_detalle: errores
         });
     } catch (error) {
-        return res.status(200).json({
-            ...clasificacionFallback(texto, 'fallback-demo-error-api'),
-            error_api: error.message
+        console.error('Error reclasificando incidentes:', error);
+
+        return res.status(500).json({
+            ok: false,
+            mensaje: 'Error al reclasificar incidentes',
+            error: error.message
         });
     }
 };
 
 module.exports = {
-    clasificarIncidente
+    clasificarIncidente,
+    reclasificarIncidentes,
+    clasificarTextoUrbanFlow
 };

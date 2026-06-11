@@ -1,7 +1,7 @@
 info:
-  name: POST Detectar Duplicado
+  name: POST Buscar Similares
   type: http
-  seq: 3
+  seq: 6
 
 http:
   method: POST
@@ -13,9 +13,9 @@ http:
     type: json
     data: |-
       {
-        "texto": "bache enorme frente al hospital",
+        "texto": "basural clandestino con acumulación de residuos",
         "limite": 5,
-        "umbral": 0.5
+        "umbral": 0.75
       }
   auth: inherit
 

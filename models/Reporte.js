@@ -93,6 +93,32 @@ const ReporteSchema = new mongoose.Schema({
     default: null
   },
 
+// Motor vectorial / embeddings
+vectorizado: {
+  type: Boolean,
+  default: false
+},
+
+vector_modelo: {
+  type: String,
+  default: null
+},
+
+embedding: {
+  type: [Number],
+  default: []
+},
+
+embedding_dimensiones: {
+  type: Number,
+  default: 0
+},
+
+embedding_actualizado_en: {
+  type: Date,
+  default: null
+},
+
   // Estado actual del reporte
   estado: {
     type: String,
@@ -126,5 +152,7 @@ ReporteSchema.index({ esDemo: 1 });
 ReporteSchema.index({ municipio: 1 });
 ReporteSchema.index({ operadorAsignadoId: 1 });
 ReporteSchema.index({ createdAt: -1 });
+ReporteSchema.index({ vectorizado: 1 });
+ReporteSchema.index({ embedding_dimensiones: 1 });
 
 module.exports = mongoose.model('Reporte', ReporteSchema);
