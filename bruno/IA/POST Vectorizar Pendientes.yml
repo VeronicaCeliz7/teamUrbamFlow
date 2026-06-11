@@ -13,7 +13,7 @@ http:
     type: json
     data: |-
       {
-        "limite": 200
+        "limite": 50
       }
   auth: inherit
 
