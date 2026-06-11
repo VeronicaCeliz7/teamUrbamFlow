@@ -10,6 +10,7 @@ const reporteRoutes = require('./routes/reporteRoutes');
 const superRoutes = require('./routes/superRoutes');
 const biRoutes = require('./routes/bi.routes');
 const iaRoutes = require('./routes/iaRoutes');
+const climaRoutes = require('./routes/climaRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,6 +37,7 @@ app.use('/api/reportes', reporteRoutes);
 app.use('/api/super', superRoutes);
 app.use('/api/bi', biRoutes);
 app.use('/api/ia', iaRoutes);
+app.use('/api/clima', climaRoutes);
 
 // Ruta protegida original (por compatibilidad)
 app.get('/api/protected', require('./middleware/auth').authMiddleware, (req, res) => {
@@ -91,4 +93,8 @@ app.listen(PORT, () => {
     console.log(`   POST   /api/ia/vectorizar-pendientes`);
     console.log(`   POST   /api/ia/similares`);
     console.log(`   GET    /api/ia/heatmap`);
+
+    console.log(`   ──────── Clima Predictivo ────────`);
+    console.log(`   GET    /api/clima/pronostico`);
+    console.log(`   GET    /api/clima/riesgo`);
 });
