@@ -1,11 +1,11 @@
 info:
-  name: POST Detectar Duplicado
+  name: POST Vectorizar Reporte
   type: http
-  seq: 3
+  seq: 5
 
 http:
   method: POST
-  url: http://localhost:3001/api/ia/similares
+  url: http://localhost:3001/api/ia/vectorizar
   headers:
     - name: Content-Type
       value: application/json
@@ -13,9 +13,7 @@ http:
     type: json
     data: |-
       {
-        "texto": "bache enorme frente al hospital",
-        "limite": 5,
-        "umbral": 0.5
+        "reporteId": "PEGAR_ID_DE_REPORTE"
       }
   auth: inherit
 

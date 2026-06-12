@@ -1,11 +1,11 @@
 info:
-  name: POST Detectar Duplicado
+  name: POST Vectorizar Pendientes
   type: http
-  seq: 3
+  seq: 4
 
 http:
   method: POST
-  url: http://localhost:3001/api/ia/similares
+  url: http://localhost:3001/api/ia/vectorizar-pendientes
   headers:
     - name: Content-Type
       value: application/json
@@ -13,9 +13,7 @@ http:
     type: json
     data: |-
       {
-        "texto": "bache enorme frente al hospital",
-        "limite": 5,
-        "umbral": 0.5
+        "limite": 50
       }
   auth: inherit
 
