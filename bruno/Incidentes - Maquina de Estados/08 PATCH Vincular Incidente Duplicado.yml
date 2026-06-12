@@ -1,0 +1,26 @@
+info:
+  name: 08 PATCH Vincular Incidente Duplicado
+  type: http
+  seq: 8
+
+http:
+  method: PATCH
+  url: http://localhost:3001/api/reportes/ID_REPORTE_DUPLICADO/vincular
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer TU_TOKEN_REAL
+  body:
+    mode: json
+    json: |
+      {
+        "incidentePrincipalId": "ID_INCIDENTE_PRINCIPAL"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -16,6 +16,12 @@ router.patch(
   reporteController.asignarOperador
 );
 
+router.patch(
+  '/:id/vincular',
+  authMiddleware,
+  reporteController.vincularIncidente
+);
+
 router.get('/:id', authMiddleware, reporteController.getReporteById);
 router.put('/:id', authMiddleware, reporteController.updateReporte);
 router.delete('/:id', authMiddleware, reporteController.deleteReporte);

@@ -107,6 +107,24 @@ const ReporteSchema = new mongoose.Schema({
     default: null
   },
 
+incidenteGrupoId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Reporte',
+  default: null
+},
+
+esIncidentePrincipal: {
+  type: Boolean,
+  default: true
+},
+
+reportesRelacionados: [
+  {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Reporte'
+  }
+],
+
 // Motor vectorial / embeddings
 vectorizado: {
   type: Boolean,
@@ -168,5 +186,7 @@ ReporteSchema.index({ operadorAsignadoId: 1 });
 ReporteSchema.index({ createdAt: -1 });
 ReporteSchema.index({ vectorizado: 1 });
 ReporteSchema.index({ embedding_dimensiones: 1 });
+ReporteSchema.index({ incidenteGrupoId: 1 });
+ReporteSchema.index({ esIncidentePrincipal: 1 });
 
 module.exports = mongoose.model('Reporte', ReporteSchema);

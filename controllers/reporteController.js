@@ -585,6 +585,66 @@ const updateCategoriaIA = async (req, res) => {
     }
 };
 
+const vincularIncidente = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { incidentePrincipalId } = req.body;
+
+        if (id === incidentePrincipalId) {
+            return res.status(400).json({
+                error: 'Un incidente no puede vincularse consigo mismo'
+            });
+        }
+
+        const reporte = await Reporte.findById(id);
+        const principal = await Reporte.findById(incidentePrincipalId);
+
+        if (!reporte || !principal) {
+            return res.status(404).json({
+                error: 'Reporte o incidente principal no encontrado'
+            });
+        }
+
+        reporte.incidenteGrupoId = principal._id;
+        reporte.esIncidentePrincipal = false;
+        reporte.posible_duplicado = true;
+        reporte.reporte_duplicado_id = principal._id;
+
+        if (!principal.reportesRelacionados) {
+            principal.reportesRelacionados = [];
+        }
+
+        const yaRelacionado = principal.reportesRelacionados.some(
+            item => item.toString() === reporte._id.toString()
+        );
+
+        if (!yaRelacionado) {
+            principal.reportesRelacionados.push(reporte._id);
+        }
+
+        principal.esIncidentePrincipal = true;
+        principal.updatedAt = Date.now();
+        reporte.updatedAt = Date.now();
+
+        await reporte.save();
+        await principal.save();
+
+        res.json({
+            success: true,
+            message: 'Incidente vinculado al grupo correctamente',
+            data: {
+                principal,
+                reporteVinculado: reporte
+            }
+        });
+    } catch (error) {
+        console.error('Error vinculando incidente:', error);
+        res.status(500).json({
+            error: 'Error al vincular incidente'
+        });
+    }
+};
+
 module.exports = {
     createReporte,
     getReportes,
@@ -594,5 +654,6 @@ module.exports = {
     deleteReporte,
     tomarReporte,
     asignarOperador,
+    vincularIncidente,
     updateCategoriaIA
 };
