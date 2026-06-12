@@ -2,7 +2,7 @@ const Reporte = require('../models/Reporte');
 const User = require('../models/User');
 const cloudinary = require('../config/cloudinary');
 const { createClerkClient } = require('@clerk/clerk-sdk-node');
-const { procesarIAReporte } = require('./iaController');
+//const { procesarIAReporte } = require('./iaController');
 
 const ESTADOS_VALIDOS = [
   'reportado',
