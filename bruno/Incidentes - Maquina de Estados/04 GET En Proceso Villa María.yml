@@ -1,0 +1,18 @@
+info:
+  name: 04 GET En Proceso Villa Maria
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: http://localhost:3001/api/reportes?municipio=villa-maria&estado=en_proceso
+  headers:
+    - name: Authorization
+      value: Bearer TU_TOKEN_REAL
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

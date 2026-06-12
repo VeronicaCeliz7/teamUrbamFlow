@@ -11,6 +11,20 @@ const HistorialEstadoSchema = new mongoose.Schema(
       type: Date,
       default: Date.now
     },
+
+    desde: {
+  type: Date,
+  default: null
+},
+hasta: {
+  type: Date,
+  default: null
+},
+duracionMinutos: {
+  type: Number,
+  default: null
+},
+
     usuarioId: {
       type: String,
       default: null

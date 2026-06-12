@@ -7,6 +7,9 @@ const reporteController = require('../controllers/reporteController');
 // Rutas protegidas (requieren autenticación)
 router.post('/', authMiddleware, reporteController.createReporte);
 router.get('/mis-reportes', authMiddleware, reporteController.getMisReportes);
+
+router.patch('/:id/tomar', authMiddleware, reporteController.tomarReporte);
+
 router.get('/:id', authMiddleware, reporteController.getReporteById);
 router.put('/:id', authMiddleware, reporteController.updateReporte);
 router.delete('/:id', authMiddleware, reporteController.deleteReporte);
@@ -16,5 +19,11 @@ router.get('/', reporteController.getReportes);
 
 // Ruta de admin para actualizar categorías con IA
 router.put('/:id/categoria-ia', authMiddleware, adminMiddleware, reporteController.updateCategoriaIA);
+
+router.patch(
+  '/:id/tomar',
+  authMiddleware,
+  reporteController.tomarReporte
+);
 
 module.exports = router;

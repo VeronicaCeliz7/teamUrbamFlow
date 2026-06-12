@@ -48,6 +48,47 @@ const detectarMunicipioPorCoordenadas = (lat, lng) => {
 
     return 'sin-municipio';
 };
+
+// Registra cada cambio de estado y calcula duración del estado anterior
+const registrarCambioEstado = (
+    reporte,
+    nuevoEstado,
+    usuarioId,
+    usuarioNombre,
+    observacion = ''
+) => {
+    const ahora = new Date();
+
+    if (!reporte.historialEstados) {
+        reporte.historialEstados = [];
+    }
+
+    const ultimoEstado = reporte.historialEstados[reporte.historialEstados.length - 1];
+
+    if (ultimoEstado && !ultimoEstado.hasta) {
+        const fechaInicio = ultimoEstado.desde || ultimoEstado.fecha || reporte.createdAt || reporte.fecha_hora;
+
+        ultimoEstado.hasta = ahora;
+        ultimoEstado.duracionMinutos = Math.max(
+            0,
+            Math.round((ahora - new Date(fechaInicio)) / 60000)
+        );
+    }
+
+    reporte.historialEstados.push({
+        estado: nuevoEstado,
+        fecha: ahora,
+        desde: ahora,
+        hasta: null,
+        duracionMinutos: null,
+        usuarioId,
+        usuarioNombre,
+        observacion
+    });
+
+    reporte.estado = nuevoEstado;
+};
+
 // Crear nuevo reporte
 const createReporte = async (req, res) => {
     try {
@@ -100,15 +141,20 @@ const createReporte = async (req, res) => {
             operadorAsignadoId: null,
             operadorAsignadoNombre: null,
             estado: 'pendiente',
-            historialEstados: [
-            {
-                 estado: 'pendiente',
-                 fecha: new Date(),
-                 usuarioId: req.auth.userId,
-                 usuarioNombre: user.email,
-                observacion: 'Incidente reportado por ciudadano'
-            }
-            ],
+            
+          historialEstados: [
+    {
+        estado: 'pendiente',
+        fecha: fecha_hora ? new Date(fecha_hora) : new Date(),
+        desde: fecha_hora ? new Date(fecha_hora) : new Date(),
+        hasta: null,
+        duracionMinutos: null,
+        usuarioId: req.auth.userId,
+        usuarioNombre: user.email,
+        observacion: 'Incidente reportado por ciudadano'
+    }
+],
+
             observaciones: observaciones ? observaciones.trim() : '',
             fecha_hora: fecha_hora ? new Date(fecha_hora) : new Date(),
             archivo_url: archivo_url || undefined,
@@ -262,6 +308,7 @@ const getReportes = async (req, res) => {
         const reportes = await Reporte.find(filtro).sort({ createdAt: -1 });
 
         console.log(`✅ Reportes encontrados: ${reportes.length}`);
+
 
         res.json({
             success: true,
@@ -439,14 +486,14 @@ const tomarReporte = async (req, res) => {
 
         reporte.operadorAsignadoId = operador.clerkUserId;
         reporte.operadorAsignadoNombre = `${operador.nombre || ''} ${operador.apellido || ''}`.trim();
-        reporte.estado = 'en_proceso';
-        reporte.historialEstados.push({
-             estado: 'en_proceso',
-             fecha: new Date(),
-             usuarioId: operador.clerkUserId,
-             usuarioNombre: reporte.operadorAsignadoNombre,
-             observacion: 'Incidente tomado por operador'
-    });
+        
+        registrarCambioEstado(
+    reporte,
+    'en_proceso',
+    operador.clerkUserId,
+    reporte.operadorAsignadoNombre,
+    'Incidente tomado por operador'
+);
         reporte.updatedAt = Date.now();
 
         await reporte.save();
@@ -481,6 +528,10 @@ const updateCategoriaIA = async (req, res) => {
         if (!reporte) {
             return res.status(404).json({ error: 'Reporte no encontrado' });
         }
+
+console.log('\n========== REPORTE COMPLETO ==========');
+console.log(JSON.stringify(reporte, null, 2));
+console.log('======================================\n');
 
         res.json({ success: true, data: reporte });
     } catch (error) {

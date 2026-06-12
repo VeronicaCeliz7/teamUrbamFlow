@@ -1,0 +1,18 @@
+info:
+  name: 05 GET Reporte Completo por ID
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: http://localhost:3001/api/reportes/6a2b426ac89a49133e155689
+  headers:
+    - name: Authorization
+      value: Bearer TU_TOKEN_REAL
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
