@@ -1,0 +1,26 @@
+info:
+  name: 07 PATCH Asignar Operador
+  type: http
+  seq: 7
+
+http:
+  method: PATCH
+  url: http://localhost:3001/api/reportes/6a2a02a18a58d71ee1e3f97f/asignar-operador
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer TU_TOKEN_REAL
+  body:
+    mode: json
+    json: |
+      {
+        "operadorId": "user_3EYCEUUUVVGYbEFsl9KzMBUC2cb"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -10,6 +10,12 @@ router.get('/mis-reportes', authMiddleware, reporteController.getMisReportes);
 
 router.patch('/:id/tomar', authMiddleware, reporteController.tomarReporte);
 
+router.patch(
+  '/:id/asignar-operador',
+  authMiddleware,
+  reporteController.asignarOperador
+);
+
 router.get('/:id', authMiddleware, reporteController.getReporteById);
 router.put('/:id', authMiddleware, reporteController.updateReporte);
 router.delete('/:id', authMiddleware, reporteController.deleteReporte);

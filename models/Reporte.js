@@ -4,7 +4,7 @@ const HistorialEstadoSchema = new mongoose.Schema(
   {
     estado: {
       type: String,
-      enum: ['pendiente', 'en_proceso', 'resuelto', 'rechazado'],
+      enum: ['pendiente', 'asignado', 'en_proceso', 'resuelto', 'rechazado'],
       required: true
     },
     fecha: {
@@ -136,7 +136,7 @@ embedding_actualizado_en: {
   // Estado actual del reporte
   estado: {
     type: String,
-    enum: ['pendiente', 'en_proceso', 'resuelto', 'rechazado'],
+    enum: ['pendiente', 'asignado', 'en_proceso', 'resuelto', 'rechazado'],
     default: 'pendiente'
   },
 

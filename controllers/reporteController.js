@@ -501,6 +501,62 @@ const tomarReporte = async (req, res) => {
     }
 };
 
+const asignarOperador = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { operadorId } = req.body;
+
+        const admin = await ensureUserExists(req.auth.userId);
+        const operador = await User.findOne({ clerkUserId: operadorId });
+
+        if (!operador) {
+            return res.status(404).json({ error: 'Operador no encontrado' });
+        }
+
+        const reporte = await Reporte.findById(id);
+
+        if (!reporte) {
+            return res.status(404).json({ error: 'Reporte no encontrado' });
+        }
+
+        if (reporte.operadorAsignadoId) {
+            return res.status(400).json({
+                error: 'Este incidente ya tiene operador asignado'
+            });
+        }
+
+        if (reporte.municipio !== operador.municipio) {
+            return res.status(403).json({
+                error: 'El operador no pertenece al municipio del incidente'
+            });
+        }
+
+        reporte.operadorAsignadoId = operador.clerkUserId;
+        reporte.operadorAsignadoNombre = `${operador.nombre || ''} ${operador.apellido || ''}`.trim();
+
+        registrarCambioEstado(
+            reporte,
+            'asignado',
+            admin.clerkUserId,
+            `${admin.nombre || ''} ${admin.apellido || ''}`.trim(),
+            `Incidente asignado a ${reporte.operadorAsignadoNombre}`
+        );
+
+        reporte.updatedAt = Date.now();
+
+        await reporte.save();
+
+        res.json({
+            success: true,
+            message: 'Operador asignado correctamente',
+            data: reporte
+        });
+    } catch (error) {
+        console.error('Error asignando operador:', error);
+        res.status(500).json({ error: 'Error al asignar operador' });
+    }
+};
+
 // Endpoint para que la IA actualice categorías (admin/ia)
 const updateCategoriaIA = async (req, res) => {
     try {
@@ -537,5 +593,6 @@ module.exports = {
     updateReporte,
     deleteReporte,
     tomarReporte,
+    asignarOperador,
     updateCategoriaIA
 };
