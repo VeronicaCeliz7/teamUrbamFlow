@@ -371,8 +371,7 @@ const updateReporte = async (req, res) => {
         } = req.body;
 
         const reporte = await Reporte.findById(id);
-        console.log('📄 REPORTE ENCONTRADO:')
-        console.log(reporte)
+
 
         if (!reporte) {
             return res.status(404).json({ error: 'Reporte no encontrado' });
@@ -383,20 +382,15 @@ const updateReporte = async (req, res) => {
             return res.status(403).json({ error: 'No autorizado para modificar este reporte' });
         }
 
-        if (estado && estado !== reporte.estado) {
-
-            reporte.historialEstados.push({
-               estado,
-               fecha: new Date(),
-               usuarioId: req.auth.userId,
-               usuarioNombre:
-                 `${user?.nombre || ''} ${user?.apellido || ''}`.trim(),
-               observacion:
-                  observaciones || `Cambio de estado a ${estado}`
-        });
-
-        reporte.estado = estado;
-} 
+if (estado && estado !== reporte.estado) {
+    registrarCambioEstado(
+        reporte,
+        estado,
+        req.auth.userId,
+        `${user?.nombre || ''} ${user?.apellido || ''}`.trim(),
+        observaciones || `Cambio de estado a ${estado}`
+    );
+}
 
          console.log('📝 NUEVO ESTADO:', reporte.estado)
         
@@ -416,9 +410,7 @@ const updateReporte = async (req, res) => {
         }
 
         await reporte.save();
-        console.log('✅ REPORTE GUARDADO:')
-        console.log(reporte)
-
+        
 
         res.json({ success: true, message: 'Reporte actualizado', data: reporte });
     } catch (error) {
@@ -529,9 +521,6 @@ const updateCategoriaIA = async (req, res) => {
             return res.status(404).json({ error: 'Reporte no encontrado' });
         }
 
-console.log('\n========== REPORTE COMPLETO ==========');
-console.log(JSON.stringify(reporte, null, 2));
-console.log('======================================\n');
 
         res.json({ success: true, data: reporte });
     } catch (error) {
