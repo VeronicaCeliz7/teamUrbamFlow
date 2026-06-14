@@ -93,6 +93,56 @@ const registrarCambioEstado = (
     reporte.estado = nuevoEstado;
 };
 
+
+
+const ESTADOS_FINALES = ['cerrado', 'rechazado'];
+
+const TRANSICIONES_VALIDAS = {
+    pendiente: ['asignado', 'en_proceso', 'rechazado'],
+    asignado: ['en_proceso', 'rechazado'],
+    en_proceso: ['resuelto', 'rechazado'],
+    resuelto: ['verificado', 'rechazado'],
+    verificado: ['cerrado'],
+    cerrado: [],
+    rechazado: []
+};
+
+const validarTransicionEstado = (estadoActual, nuevoEstado) => {
+    const permitidas = TRANSICIONES_VALIDAS[estadoActual] || [];
+    return permitidas.includes(nuevoEstado);
+};
+
+const calcularMetricasReporte = (reporte) => {
+    const historial = reporte.historialEstados || [];
+
+    const duracionPorEstado = historial.reduce((acc, item) => {
+        if (item.duracionMinutos !== null && item.duracionMinutos !== undefined) {
+            acc[item.estado] = (acc[item.estado] || 0) + item.duracionMinutos;
+        }
+        return acc;
+    }, {});
+
+    const creado = reporte.fecha_hora || reporte.createdAt;
+    const inicioProceso = historial.find((item) => item.estado === 'en_proceso')?.desde;
+    const resuelto = historial.find((item) => item.estado === 'resuelto')?.desde;
+    const cerrado = historial.find((item) => item.estado === 'cerrado')?.desde;
+
+    return {
+        minutosPendiente: duracionPorEstado.pendiente || 0,
+        minutosAsignado: duracionPorEstado.asignado || 0,
+        minutosEnProceso: duracionPorEstado.en_proceso || 0,
+        tiempoAceptacionMinutos: inicioProceso && creado
+            ? Math.max(0, Math.round((new Date(inicioProceso) - new Date(creado)) / 60000))
+            : null,
+        tiempoResolucionMinutos: resuelto && creado
+            ? Math.max(0, Math.round((new Date(resuelto) - new Date(creado)) / 60000))
+            : null,
+        tiempoCierreMinutos: cerrado && creado
+            ? Math.max(0, Math.round((new Date(cerrado) - new Date(creado)) / 60000))
+            : null
+    };
+};
+
 // Crear nuevo reporte
 const createReporte = async (req, res) => {
     try {
@@ -449,6 +499,15 @@ const updateReporte = async (req, res) => {
         }
 
 if (estado && estado !== reporte.estado) {
+    if (!validarTransicionEstado(reporte.estado, estado)) {
+        return res.status(400).json({
+            error: 'Transición de estado no permitida',
+            estadoActual: reporte.estado,
+            estadoSolicitado: estado,
+            estadosPermitidos: TRANSICIONES_VALIDAS[reporte.estado] || []
+        });
+    }
+
     registrarCambioEstado(
         reporte,
         estado,
@@ -543,6 +602,14 @@ const tomarReporte = async (req, res) => {
             });
         }
 
+        if (!validarTransicionEstado(reporte.estado, 'en_proceso')) {
+            return res.status(400).json({
+                error: 'No se puede tomar este incidente desde su estado actual',
+                estadoActual: reporte.estado,
+                estadosPermitidos: TRANSICIONES_VALIDAS[reporte.estado] || []
+            });
+        }
+
         reporte.operadorAsignadoId = operador.clerkUserId;
         reporte.operadorAsignadoNombre = `${operador.nombre || ''} ${operador.apellido || ''}`.trim();
         
@@ -621,6 +688,139 @@ const asignarOperador = async (req, res) => {
     } catch (error) {
         console.error('Error asignando operador:', error);
         res.status(500).json({ error: 'Error al asignar operador' });
+    }
+};
+
+
+const cambiarEstadoReporte = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { estado, observacion = '' } = req.body;
+
+        if (!estado) {
+            return res.status(400).json({ error: 'El nuevo estado es obligatorio' });
+        }
+
+        const reporte = await Reporte.findById(id);
+        if (!reporte) {
+            return res.status(404).json({ error: 'Reporte no encontrado' });
+        }
+
+        if (ESTADOS_FINALES.includes(reporte.estado)) {
+            return res.status(400).json({
+                error: `El incidente ya está en estado final: ${reporte.estado}`
+            });
+        }
+
+        if (!validarTransicionEstado(reporte.estado, estado)) {
+            return res.status(400).json({
+                error: 'Transición de estado no permitida',
+                estadoActual: reporte.estado,
+                estadoSolicitado: estado,
+                estadosPermitidos: TRANSICIONES_VALIDAS[reporte.estado] || []
+            });
+        }
+
+        const usuario = await ensureUserExists(req.auth.userId);
+        const usuarioNombre = `${usuario.nombre || ''} ${usuario.apellido || ''}`.trim() || usuario.email;
+
+        registrarCambioEstado(
+            reporte,
+            estado,
+            usuario.clerkUserId,
+            usuarioNombre,
+            observacion || `Cambio de estado: ${reporte.estado} → ${estado}`
+        );
+
+        reporte.updatedAt = Date.now();
+        await reporte.save();
+
+        res.json({
+            success: true,
+            message: 'Estado actualizado correctamente',
+            data: reporte,
+            metricas: calcularMetricasReporte(reporte)
+        });
+    } catch (error) {
+        console.error('Error cambiando estado del reporte:', error);
+        res.status(500).json({ error: 'Error al cambiar estado del incidente' });
+    }
+};
+
+const getMetricasWorkflow = async (req, res) => {
+    try {
+        const { municipio, operadorId } = req.query;
+        const filtro = {};
+
+        if (municipio) filtro.municipio = municipio;
+        if (operadorId) filtro.operadorAsignadoId = operadorId;
+
+        const reportes = await Reporte.find(filtro).lean();
+
+        const acumulado = {
+            total: reportes.length,
+            cerrados: 0,
+            rechazados: 0,
+            tiempoAceptacionTotal: 0,
+            tiempoAceptacionCount: 0,
+            tiempoResolucionTotal: 0,
+            tiempoResolucionCount: 0,
+            tiempoCierreTotal: 0,
+            tiempoCierreCount: 0,
+            porOperador: {},
+            porMunicipio: {}
+        };
+
+        reportes.forEach((reporte) => {
+            const metricas = calcularMetricasReporte(reporte);
+
+            if (reporte.estado === 'cerrado') acumulado.cerrados += 1;
+            if (reporte.estado === 'rechazado') acumulado.rechazados += 1;
+
+            if (metricas.tiempoAceptacionMinutos !== null) {
+                acumulado.tiempoAceptacionTotal += metricas.tiempoAceptacionMinutos;
+                acumulado.tiempoAceptacionCount += 1;
+            }
+
+            if (metricas.tiempoResolucionMinutos !== null) {
+                acumulado.tiempoResolucionTotal += metricas.tiempoResolucionMinutos;
+                acumulado.tiempoResolucionCount += 1;
+            }
+
+            if (metricas.tiempoCierreMinutos !== null) {
+                acumulado.tiempoCierreTotal += metricas.tiempoCierreMinutos;
+                acumulado.tiempoCierreCount += 1;
+            }
+
+            const operadorKey = reporte.operadorAsignadoNombre || reporte.operadorAsignadoId || 'Sin operador';
+            const municipioKey = reporte.municipio || 'Sin municipio';
+
+            acumulado.porOperador[operadorKey] = (acumulado.porOperador[operadorKey] || 0) + 1;
+            acumulado.porMunicipio[municipioKey] = (acumulado.porMunicipio[municipioKey] || 0) + 1;
+        });
+
+        res.json({
+            success: true,
+            data: {
+                totalIncidentes: acumulado.total,
+                cerrados: acumulado.cerrados,
+                rechazados: acumulado.rechazados,
+                tiempoPromedioAceptacionMinutos: acumulado.tiempoAceptacionCount
+                    ? Math.round(acumulado.tiempoAceptacionTotal / acumulado.tiempoAceptacionCount)
+                    : null,
+                tiempoPromedioResolucionMinutos: acumulado.tiempoResolucionCount
+                    ? Math.round(acumulado.tiempoResolucionTotal / acumulado.tiempoResolucionCount)
+                    : null,
+                tiempoPromedioCierreMinutos: acumulado.tiempoCierreCount
+                    ? Math.round(acumulado.tiempoCierreTotal / acumulado.tiempoCierreCount)
+                    : null,
+                porOperador: acumulado.porOperador,
+                porMunicipio: acumulado.porMunicipio
+            }
+        });
+    } catch (error) {
+        console.error('Error obteniendo métricas workflow:', error);
+        res.status(500).json({ error: 'Error al obtener métricas de workflow' });
     }
 };
 
@@ -722,5 +922,7 @@ module.exports = {
     tomarReporte,
     asignarOperador,
     vincularIncidente,
+    cambiarEstadoReporte,
+    getMetricasWorkflow,
     updateCategoriaIA
 };
