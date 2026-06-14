@@ -121,32 +121,44 @@ function resumirPronostico24h(data) {
 
 const obtenerPronostico = async (req, res) => {
   try {
-    const data = await obtenerPronosticoOpenMeteo();
-    const resumen = resumirPronostico24h(data);
+    const lat = req.query.lat || -32.4105;
+    const lon = req.query.lon || -63.2402;
+    const localidad = req.query.localidad || 'Villa María';
 
-    return res.json({
+    const url =
+      `https://api.open-meteo.com/v1/forecast` +
+      `?latitude=${lat}` +
+      `&longitude=${lon}` +
+      `&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m` +
+      `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max` +
+      `&timezone=America/Argentina/Cordoba` +
+      `&forecast_days=7`;
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    const ahora = new Date();
+
+    res.json({
       ok: true,
-      fuente: 'Open-Meteo',
-      ubicacion: VILLA_MARIA,
-      ventana: 'proximas_24h',
-      pronostico: resumen,
-      unidades: {
-        lluvia24h: 'mm',
-        vientoMaxKmh: 'km/h',
-        temperaturaMax: '°C',
-        temperaturaMin: '°C'
-      }
+      localidad,
+      fecha: ahora.toLocaleDateString('es-AR'),
+      hora: ahora.toLocaleTimeString('es-AR', {
+        hour: '2-digit',
+        minute: '2-digit'
+      }),
+      actual: data.current,
+      diario: data.daily
     });
   } catch (error) {
-    console.error('Error obteniendo pronóstico:', error);
-
-    return res.status(500).json({
+    res.status(500).json({
       ok: false,
-      mensaje: 'No se pudo obtener el pronóstico climático.',
-      error: error.message
+      error: 'Error al obtener pronóstico',
+      detalle: error.message
     });
   }
 };
+
 
 const obtenerRiesgoClimatico = async (req, res) => {
   try {

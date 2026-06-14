@@ -2,6 +2,10 @@ const Reporte = require('../models/Reporte');
 const User = require('../models/User');
 const cloudinary = require('../config/cloudinary');
 const { createClerkClient } = require('@clerk/clerk-sdk-node');
+const {
+  generarEmbeddingGemini,
+  evaluarAgrupacionIA
+} = require('./embeddingController');
 
 // Función auxiliar para asegurar que el usuario existe en MongoDB
 const ensureUserExists = async (clerkUserId) => {
@@ -169,6 +173,48 @@ const createReporte = async (req, res) => {
         console.log('💾 Guardando en MongoDB...');
         await reporte.save();
         
+try {
+    const textoParaVectorizar = `
+        ${reporte.titulo || ''}
+        ${reporte.columna_unica || ''}
+        ${reporte.observaciones || ''}
+        ${reporte.direccion || ''}
+        ${reporte.categoria_asignada_por_ia || ''}
+        ${reporte.prioridad || ''}
+        ${reporte.municipio || ''}
+    `;
+
+console.log('🧠 Iniciando vectorización automática...');
+
+    const embedding = await generarEmbeddingGemini(textoParaVectorizar);
+
+console.log('🧠 Embedding generado');
+
+    reporte.embedding = embedding;
+    reporte.vectorizado = true;
+    reporte.vector_modelo = 'gemini-embedding-001';
+    reporte.embedding_dimensiones = embedding.length;
+    reporte.embedding_actualizado_en = new Date();
+
+console.log('🧠 Evaluando agrupación IA...');
+
+    const agrupacionIA = await evaluarAgrupacionIA(reporte);
+
+    await reporte.save();
+
+    console.log('✅ Reporte vectorizado y evaluado por IA:', {
+        id: reporte._id,
+        decision: agrupacionIA?.decision,
+        score: reporte.duplicado_score
+    });
+} catch (error) {
+    console.error(
+        '⚠️ No se pudo vectorizar automáticamente el reporte:',
+        error.message
+    );
+}
+
+
         console.log(`✅ Reporte creado ID: ${reporte._id} por usuario: ${user.email}`);
         console.log('🚨 ========== FIN CREATE REPORTE ==========\n');
 
@@ -213,6 +259,9 @@ const createReporte = async (req, res) => {
 
 // Obtener todos los reportes (con filtros opcionales)
 const getReportes = async (req, res) => {
+
+console.log("QUERY:", req.query);
+
     try {
         const {
             estado,
@@ -228,6 +277,14 @@ const getReportes = async (req, res) => {
         } = req.query;
 
         let filtro = {};
+
+if (req.query.soloPrincipales === 'true') {
+  filtro.$or = [
+    { incidenteGrupoId: null },
+    { incidenteGrupoId: { $exists: false } },
+    { esIncidentePrincipal: true }
+  ];
+}
 
         if (estado) {
             filtro.estado = estado;
@@ -305,7 +362,16 @@ const getReportes = async (req, res) => {
 
         console.log('🔎 FILTRO REPORTES:', JSON.stringify(filtro, null, 2));
 
-        const reportes = await Reporte.find(filtro).sort({ createdAt: -1 });
+        const reportes = await Reporte.find(filtro)
+  .sort({ createdAt: -1 })
+  .lean();
+
+const reportesConConteo = reportes.map((reporte) => ({
+  ...reporte,
+  reportesRelacionadosCount: Array.isArray(reporte.reportesRelacionados)
+    ? reporte.reportesRelacionados.length
+    : 0
+}));
 
         console.log(`✅ Reportes encontrados: ${reportes.length}`);
 
@@ -313,7 +379,7 @@ const getReportes = async (req, res) => {
         res.json({
             success: true,
             count: reportes.length,
-            data: reportes
+            data: reportesConConteo
         });
 
     } catch (error) {
@@ -419,6 +485,7 @@ if (estado && estado !== reporte.estado) {
         res.status(500).json({ error: 'Error al actualizar reporte' });
     }
 };
+
 
 // Eliminar reporte
 const deleteReporte = async (req, res) => {

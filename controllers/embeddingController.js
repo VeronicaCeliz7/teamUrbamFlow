@@ -62,6 +62,183 @@ function cosineSimilarity(a, b) {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
+function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
+  if (
+    lat1 === undefined ||
+    lon1 === undefined ||
+    lat2 === undefined ||
+    lon2 === undefined
+  ) {
+    return null;
+  }
+
+  const R = 6371000;
+  const toRad = (value) => (Number(value) * Math.PI) / 180;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return Math.round(R * c);
+}
+
+async function evaluarAgrupacionIA(reporte) {
+  const UMBRAL_AUTOMATICO = 0.95;
+  const UMBRAL_AUTOMATICO_CERCANO = 0.85;
+  const DISTANCIA_MAXIMA_AGRUPACION = 80;
+  const UMBRAL_SUGERIDO = 0.80;
+
+  if (!reporte.embedding?.length) {
+    return {
+      decision: 'sin_embedding',
+      mensaje: 'El reporte no tiene embedding para comparar.'
+    };
+  }
+
+  const candidatos = await Reporte.find({
+    _id: { $ne: reporte._id },
+    vectorizado: true,
+    embedding: { $exists: true, $ne: [] },
+    municipio: reporte.municipio,
+    estado: { $nin: ['resuelto', 'cerrado', 'rechazado'] }
+  }).limit(500);
+
+  let mejor = null;
+
+  for (const candidato of candidatos) {
+    const mismaCategoria =
+      candidato.categoria_asignada_por_ia === reporte.categoria_asignada_por_ia ||
+      candidato.prioridad === reporte.prioridad;
+
+    if (!mismaCategoria) continue;
+
+    const similitud = cosineSimilarity(reporte.embedding, candidato.embedding);
+
+    const distanciaMetros = calcularDistanciaMetros(
+      reporte.latitud,
+      reporte.longitud,
+      candidato.latitud,
+      candidato.longitud
+    );
+
+    if (!mejor || similitud > mejor.similitud) {
+      mejor = {
+        reporte: candidato,
+        similitud,
+        distanciaMetros
+      };
+    }
+  }
+
+  if (!mejor || mejor.similitud < UMBRAL_SUGERIDO) {
+    reporte.esIncidentePrincipal = true;
+    reporte.incidenteGrupoId = null;
+    reporte.posible_duplicado = false;
+    reporte.reporte_duplicado_id = null;
+    reporte.duplicado_sugerido_id = null;
+    reporte.duplicado_score = mejor
+      ? Number(mejor.similitud.toFixed(4))
+      : null;
+    reporte.duplicado_estado = 'ninguno';
+
+    return {
+      decision: 'ninguno',
+      similitud: mejor
+        ? Number(mejor.similitud.toFixed(4))
+        : null,
+      porcentaje: mejor
+        ? Math.round(mejor.similitud * 100)
+        : null
+    };
+  }
+
+  const principal = mejor.reporte.esIncidentePrincipal
+    ? mejor.reporte
+    : await Reporte.findById(
+        mejor.reporte.incidenteGrupoId ||
+        mejor.reporte.reporte_duplicado_id
+      );
+
+  if (!principal) {
+    return {
+      decision: 'sin_principal',
+      mensaje: 'Se encontró similar, pero no se pudo resolver incidente principal.'
+    };
+  }
+
+  const score = Number(mejor.similitud.toFixed(4));
+  const porcentaje = Math.round(mejor.similitud * 100);
+
+  const agrupacionCercana =
+    mejor.similitud >= UMBRAL_AUTOMATICO_CERCANO &&
+    mejor.distanciaMetros !== null &&
+    mejor.distanciaMetros <= DISTANCIA_MAXIMA_AGRUPACION;
+
+  reporte.duplicado_score = score;
+  reporte.duplicado_sugerido_id = principal._id;
+
+  if (mejor.similitud >= UMBRAL_AUTOMATICO || agrupacionCercana) {
+    reporte.incidenteGrupoId = principal._id;
+    reporte.esIncidentePrincipal = false;
+    reporte.posible_duplicado = true;
+    reporte.reporte_duplicado_id = principal._id;
+    reporte.duplicado_estado = 'automatico';
+
+    if (!principal.reportesRelacionados) {
+      principal.reportesRelacionados = [];
+    }
+
+    const yaRelacionado = principal.reportesRelacionados.some(
+      (item) => item.toString() === reporte._id.toString()
+    );
+
+    if (!yaRelacionado) {
+      principal.reportesRelacionados.push(reporte._id);
+    }
+
+    principal.esIncidentePrincipal = true;
+    principal.updatedAt = new Date();
+
+    await principal.save();
+
+    return {
+      decision: 'automatico',
+      criterio: agrupacionCercana
+        ? 'cercania_semantica'
+        : 'alta_similitud',
+      principalId: principal._id,
+      principalTitulo: principal.titulo,
+      similitud: score,
+      porcentaje,
+      distanciaMetros: mejor.distanciaMetros
+    };
+  }
+
+  reporte.posible_duplicado = true;
+  reporte.duplicado_estado = 'sugerido';
+  reporte.incidenteGrupoId = null;
+  reporte.esIncidentePrincipal = true;
+  reporte.reporte_duplicado_id = null;
+
+  return {
+    decision: 'sugerido',
+    principalSugeridoId: principal._id,
+    principalTitulo: principal.titulo,
+    similitud: score,
+    porcentaje,
+    distanciaMetros: mejor.distanciaMetros
+  };
+}
+
+
 const vectorizarReporte = async (req, res) => {
   try {
     const { reporteId } = req.body;
@@ -85,14 +262,17 @@ const vectorizarReporte = async (req, res) => {
     reporte.embedding_dimensiones = embedding.length;
     reporte.embedding_actualizado_en = new Date();
 
-    await reporte.save();
+const agrupacionIA = await evaluarAgrupacionIA(reporte);
 
-    return res.json({
-      ok: true,
-      reporteId: reporte._id,
-      vectorizado: true,
-      embedding_dimensiones: embedding.length
-    });
+await reporte.save();
+
+return res.json({
+  ok: true,
+  reporteId: reporte._id,
+  vectorizado: true,
+  embedding_dimensiones: embedding.length,
+  agrupacionIA
+});
   } catch (error) {
     console.error(error);
 
@@ -132,13 +312,16 @@ const vectorizarPendientes = async (req, res) => {
         reporte.embedding_dimensiones = embedding.length;
         reporte.embedding_actualizado_en = new Date();
 
-        await reporte.save();
+const agrupacionIA = await evaluarAgrupacionIA(reporte);
 
-        resultados.push({
-          id: reporte._id,
-          titulo: reporte.titulo,
-          dimensiones: embedding.length
-        });
+await reporte.save();
+
+resultados.push({
+  id: reporte._id,
+  titulo: reporte.titulo,
+  dimensiones: embedding.length,
+  agrupacionIA
+});
       } catch (e) {
         console.error(e);
       }
@@ -235,8 +418,8 @@ const heatmapData = async (req, res) => {
 
     const reportes = await Reporte.find(filtro)
       .select(
-        'titulo columna_unica categoria_asignada_por_ia prioridad estado municipio direccion latitud longitud ai_priority_score posible_duplicado vectorizado embedding_dimensiones fecha_hora createdAt'
-      )
+  'titulo columna_unica categoria_asignada_por_ia prioridad estado municipio direccion latitud longitud ai_priority_score posible_duplicado vectorizado embedding_dimensiones fecha_hora createdAt incidenteGrupoId esIncidentePrincipal reportesRelacionados duplicado_sugerido_id duplicado_score duplicado_estado reporte_duplicado_id'
+)
       .sort({ createdAt: -1 })
       .limit(2000);
 
@@ -244,23 +427,33 @@ const heatmapData = async (req, res) => {
       const score = Number(r.ai_priority_score || 25);
 
       return {
-        id: r._id,
-        titulo: r.titulo,
-        descripcion: r.columna_unica,
-        categoria: r.categoria_asignada_por_ia || 'sin_categoria',
-        prioridad: r.prioridad || 'media',
-        estado: r.estado,
-        municipio: r.municipio || 'sin_municipio',
-        direccion: r.direccion,
-        latitud: r.latitud,
-        longitud: r.longitud,
-        intensidad: Math.max(1, Math.min(100, score)),
-        posible_duplicado: Boolean(r.posible_duplicado),
-        vectorizado: Boolean(r.vectorizado),
-        embedding_dimensiones: r.embedding_dimensiones || 0,
-        fecha_hora: r.fecha_hora,
-        createdAt: r.createdAt
-      };
+  id: r._id,
+  titulo: r.titulo,
+  descripcion: r.columna_unica,
+  categoria: r.categoria_asignada_por_ia || 'sin_categoria',
+  prioridad: r.prioridad || 'media',
+  estado: r.estado,
+  municipio: r.municipio || 'sin_municipio',
+  direccion: r.direccion,
+  latitud: r.latitud,
+  longitud: r.longitud,
+  intensidad: Math.max(1, Math.min(100, score)),
+  posible_duplicado: Boolean(r.posible_duplicado),
+  vectorizado: Boolean(r.vectorizado),
+  embedding_dimensiones: r.embedding_dimensiones || 0,
+  fecha_hora: r.fecha_hora,
+  createdAt: r.createdAt,
+
+  duplicado_estado: r.duplicado_estado || 'ninguno',
+  duplicado_score: r.duplicado_score || null,
+  duplicado_sugerido_id: r.duplicado_sugerido_id || null,
+  incidenteGrupoId: r.incidenteGrupoId || null,
+  esIncidentePrincipal: r.esIncidentePrincipal,
+  reportesRelacionadosCount: Array.isArray(r.reportesRelacionados)
+    ? r.reportesRelacionados.length
+    : 0,
+  reporte_duplicado_id: r.reporte_duplicado_id || null
+};
     });
 
     const resumenPorCategoria = puntos.reduce((acc, p) => {
@@ -306,5 +499,6 @@ module.exports = {
   buscarSimilares,
   heatmapData,
   cosineSimilarity,
-  generarEmbeddingGemini
+  generarEmbeddingGemini,
+  evaluarAgrupacionIA
 };

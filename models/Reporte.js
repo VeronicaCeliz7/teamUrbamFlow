@@ -107,6 +107,23 @@ const ReporteSchema = new mongoose.Schema({
     default: null
   },
 
+duplicado_sugerido_id: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Reporte',
+  default: null
+},
+
+duplicado_score: {
+  type: Number,
+  default: null
+},
+
+duplicado_estado: {
+  type: String,
+  enum: ['ninguno', 'sugerido', 'automatico', 'rechazado'],
+  default: 'ninguno'
+},
+
 incidenteGrupoId: {
   type: mongoose.Schema.Types.ObjectId,
   ref: 'Reporte',
@@ -188,5 +205,8 @@ ReporteSchema.index({ vectorizado: 1 });
 ReporteSchema.index({ embedding_dimensiones: 1 });
 ReporteSchema.index({ incidenteGrupoId: 1 });
 ReporteSchema.index({ esIncidentePrincipal: 1 });
+ReporteSchema.index({ duplicado_estado: 1 });
+ReporteSchema.index({ duplicado_sugerido_id: 1 });
+ReporteSchema.index({ duplicado_score: 1 });
 
 module.exports = mongoose.model('Reporte', ReporteSchema);
