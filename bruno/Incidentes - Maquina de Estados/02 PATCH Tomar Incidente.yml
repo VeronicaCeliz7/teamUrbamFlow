@@ -1,0 +1,23 @@
+info:
+  name: 02 PATCH Tomar Incidente
+  type: http
+  seq: 2
+
+http:
+  method: PATCH
+  url: http://localhost:3001/api/reportes/6a2a040b8a58d71ee1e3f981/tomar
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer TU_TOKEN_REAL
+  body:
+    mode: json
+    json: "{}"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

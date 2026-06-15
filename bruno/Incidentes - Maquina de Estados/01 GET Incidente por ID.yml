@@ -1,0 +1,18 @@
+info:
+  name: 01 GET Incidente por ID
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: http://localhost:3001/api/reportes/6a2a040b8a58d71ee1e3f981
+  headers:
+    - name: Authorization
+      value: Bearer TU_TOKEN_REAL
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

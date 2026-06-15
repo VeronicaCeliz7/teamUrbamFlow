@@ -4,13 +4,27 @@ const HistorialEstadoSchema = new mongoose.Schema(
   {
     estado: {
       type: String,
-      enum: ['pendiente', 'en_proceso', 'resuelto', 'rechazado'],
+      enum: ['pendiente', 'asignado', 'en_proceso', 'resuelto', 'rechazado', 'verificado', 'cerrado'],
       required: true
     },
     fecha: {
       type: Date,
       default: Date.now
     },
+
+    desde: {
+  type: Date,
+  default: null
+},
+hasta: {
+  type: Date,
+  default: null
+},
+duracionMinutos: {
+  type: Number,
+  default: null
+},
+
     usuarioId: {
       type: String,
       default: null
@@ -133,6 +147,41 @@ vector_modelo: {
   default: null
 },
 
+duplicado_sugerido_id: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Reporte',
+  default: null
+},
+
+duplicado_score: {
+  type: Number,
+  default: null
+},
+
+duplicado_estado: {
+  type: String,
+  enum: ['ninguno', 'sugerido', 'automatico', 'rechazado'],
+  default: 'ninguno'
+},
+
+incidenteGrupoId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Reporte',
+  default: null
+},
+
+esIncidentePrincipal: {
+  type: Boolean,
+  default: true
+},
+
+reportesRelacionados: [
+  {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Reporte'
+  }
+],
+
 // Motor vectorial / embeddings
 vectorizado: {
   type: Boolean,
@@ -162,7 +211,7 @@ embedding_actualizado_en: {
   // Estado actual del reporte
   estado: {
     type: String,
-    enum: ['pendiente', 'en_proceso', 'resuelto', 'rechazado'],
+    enum: ['pendiente', 'asignado', 'en_proceso', 'resuelto', 'rechazado', 'verificado', 'cerrado'],
     default: 'pendiente'
   },
 
@@ -194,5 +243,10 @@ ReporteSchema.index({ operadorAsignadoId: 1 });
 ReporteSchema.index({ createdAt: -1 });
 ReporteSchema.index({ vectorizado: 1 });
 ReporteSchema.index({ embedding_dimensiones: 1 });
+ReporteSchema.index({ incidenteGrupoId: 1 });
+ReporteSchema.index({ esIncidentePrincipal: 1 });
+ReporteSchema.index({ duplicado_estado: 1 });
+ReporteSchema.index({ duplicado_sugerido_id: 1 });
+ReporteSchema.index({ duplicado_score: 1 });
 
 module.exports = mongoose.model('Reporte', ReporteSchema);

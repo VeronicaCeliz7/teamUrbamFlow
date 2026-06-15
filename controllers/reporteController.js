@@ -2,7 +2,10 @@ const Reporte = require('../models/Reporte');
 const User = require('../models/User');
 const cloudinary = require('../config/cloudinary');
 const { createClerkClient } = require('@clerk/clerk-sdk-node');
-const { procesarIAReporte } = require('./iaController');
+const {
+  generarEmbeddingGemini,
+  evaluarAgrupacionIA
+} = require('./embeddingController');
 
 // Función auxiliar para asegurar que el usuario existe en MongoDB
 const ensureUserExists = async (clerkUserId) => {
@@ -49,6 +52,97 @@ const detectarMunicipioPorCoordenadas = (lat, lng) => {
 
     return 'sin-municipio';
 };
+
+// Registra cada cambio de estado y calcula duración del estado anterior
+const registrarCambioEstado = (
+    reporte,
+    nuevoEstado,
+    usuarioId,
+    usuarioNombre,
+    observacion = ''
+) => {
+    const ahora = new Date();
+
+    if (!reporte.historialEstados) {
+        reporte.historialEstados = [];
+    }
+
+    const ultimoEstado = reporte.historialEstados[reporte.historialEstados.length - 1];
+
+    if (ultimoEstado && !ultimoEstado.hasta) {
+        const fechaInicio = ultimoEstado.desde || ultimoEstado.fecha || reporte.createdAt || reporte.fecha_hora;
+
+        ultimoEstado.hasta = ahora;
+        ultimoEstado.duracionMinutos = Math.max(
+            0,
+            Math.round((ahora - new Date(fechaInicio)) / 60000)
+        );
+    }
+
+    reporte.historialEstados.push({
+        estado: nuevoEstado,
+        fecha: ahora,
+        desde: ahora,
+        hasta: null,
+        duracionMinutos: null,
+        usuarioId,
+        usuarioNombre,
+        observacion
+    });
+
+    reporte.estado = nuevoEstado;
+};
+
+
+
+const ESTADOS_FINALES = ['cerrado', 'rechazado'];
+
+const TRANSICIONES_VALIDAS = {
+    pendiente: ['asignado', 'en_proceso', 'rechazado'],
+    asignado: ['en_proceso', 'rechazado'],
+    en_proceso: ['resuelto', 'rechazado'],
+    resuelto: ['verificado', 'rechazado'],
+    verificado: ['cerrado'],
+    cerrado: [],
+    rechazado: []
+};
+
+const validarTransicionEstado = (estadoActual, nuevoEstado) => {
+    const permitidas = TRANSICIONES_VALIDAS[estadoActual] || [];
+    return permitidas.includes(nuevoEstado);
+};
+
+const calcularMetricasReporte = (reporte) => {
+    const historial = reporte.historialEstados || [];
+
+    const duracionPorEstado = historial.reduce((acc, item) => {
+        if (item.duracionMinutos !== null && item.duracionMinutos !== undefined) {
+            acc[item.estado] = (acc[item.estado] || 0) + item.duracionMinutos;
+        }
+        return acc;
+    }, {});
+
+    const creado = reporte.fecha_hora || reporte.createdAt;
+    const inicioProceso = historial.find((item) => item.estado === 'en_proceso')?.desde;
+    const resuelto = historial.find((item) => item.estado === 'resuelto')?.desde;
+    const cerrado = historial.find((item) => item.estado === 'cerrado')?.desde;
+
+    return {
+        minutosPendiente: duracionPorEstado.pendiente || 0,
+        minutosAsignado: duracionPorEstado.asignado || 0,
+        minutosEnProceso: duracionPorEstado.en_proceso || 0,
+        tiempoAceptacionMinutos: inicioProceso && creado
+            ? Math.max(0, Math.round((new Date(inicioProceso) - new Date(creado)) / 60000))
+            : null,
+        tiempoResolucionMinutos: resuelto && creado
+            ? Math.max(0, Math.round((new Date(resuelto) - new Date(creado)) / 60000))
+            : null,
+        tiempoCierreMinutos: cerrado && creado
+            ? Math.max(0, Math.round((new Date(cerrado) - new Date(creado)) / 60000))
+            : null
+    };
+};
+
 // Crear nuevo reporte
 const createReporte = async (req, res) => {
     try {
@@ -101,15 +195,20 @@ const createReporte = async (req, res) => {
             operadorAsignadoId: null,
             operadorAsignadoNombre: null,
             estado: 'pendiente',
-            historialEstados: [
-            {
-                 estado: 'pendiente',
-                 fecha: new Date(),
-                 usuarioId: req.auth.userId,
-                 usuarioNombre: user.email,
-                observacion: 'Incidente reportado por ciudadano'
-            }
-            ],
+            
+          historialEstados: [
+    {
+        estado: 'pendiente',
+        fecha: fecha_hora ? new Date(fecha_hora) : new Date(),
+        desde: fecha_hora ? new Date(fecha_hora) : new Date(),
+        hasta: null,
+        duracionMinutos: null,
+        usuarioId: req.auth.userId,
+        usuarioNombre: user.email,
+        observacion: 'Incidente reportado por ciudadano'
+    }
+],
+
             observaciones: observaciones ? observaciones.trim() : '',
             fecha_hora: fecha_hora ? new Date(fecha_hora) : new Date(),
             archivo_url: archivo_url || undefined,
@@ -123,13 +222,48 @@ const createReporte = async (req, res) => {
 
         console.log('💾 Guardando en MongoDB...');
         await reporte.save();
-        try {
-            console.log('🤖 Procesando reporte con IA Gemini...');
-            const resultadoIA = await procesarIAReporte(reporte);
-            console.log('✅ IA procesada:', JSON.stringify(resultadoIA, null, 2));
-        } catch (iaError) {
-            console.error('⚠️ Error IA no bloqueante:', iaError.message);
-        }
+        
+try {
+    const textoParaVectorizar = `
+        ${reporte.titulo || ''}
+        ${reporte.columna_unica || ''}
+        ${reporte.observaciones || ''}
+        ${reporte.direccion || ''}
+        ${reporte.categoria_asignada_por_ia || ''}
+        ${reporte.prioridad || ''}
+        ${reporte.municipio || ''}
+    `;
+
+console.log('🧠 Iniciando vectorización automática...');
+
+    const embedding = await generarEmbeddingGemini(textoParaVectorizar);
+
+console.log('🧠 Embedding generado');
+
+    reporte.embedding = embedding;
+    reporte.vectorizado = true;
+    reporte.vector_modelo = 'gemini-embedding-001';
+    reporte.embedding_dimensiones = embedding.length;
+    reporte.embedding_actualizado_en = new Date();
+
+console.log('🧠 Evaluando agrupación IA...');
+
+    const agrupacionIA = await evaluarAgrupacionIA(reporte);
+
+    await reporte.save();
+
+    console.log('✅ Reporte vectorizado y evaluado por IA:', {
+        id: reporte._id,
+        decision: agrupacionIA?.decision,
+        score: reporte.duplicado_score
+    });
+} catch (error) {
+    console.error(
+        '⚠️ No se pudo vectorizar automáticamente el reporte:',
+        error.message
+    );
+}
+
 
         console.log(`✅ Reporte creado ID: ${reporte._id} por usuario: ${user.email}`);
         console.log('🚨 ========== FIN CREATE REPORTE ==========\n');
@@ -175,6 +309,9 @@ const createReporte = async (req, res) => {
 
 // Obtener todos los reportes (con filtros opcionales)
 const getReportes = async (req, res) => {
+
+console.log("QUERY:", req.query);
+
     try {
         const {
             estado,
@@ -190,6 +327,14 @@ const getReportes = async (req, res) => {
         } = req.query;
 
         let filtro = {};
+
+if (req.query.soloPrincipales === 'true') {
+  filtro.$or = [
+    { incidenteGrupoId: null },
+    { incidenteGrupoId: { $exists: false } },
+    { esIncidentePrincipal: true }
+  ];
+}
 
         if (estado) {
             filtro.estado = estado;
@@ -267,14 +412,24 @@ const getReportes = async (req, res) => {
 
         console.log('🔎 FILTRO REPORTES:', JSON.stringify(filtro, null, 2));
 
-        const reportes = await Reporte.find(filtro).sort({ createdAt: -1 });
+        const reportes = await Reporte.find(filtro)
+  .sort({ createdAt: -1 })
+  .lean();
+
+const reportesConConteo = reportes.map((reporte) => ({
+  ...reporte,
+  reportesRelacionadosCount: Array.isArray(reporte.reportesRelacionados)
+    ? reporte.reportesRelacionados.length
+    : 0
+}));
 
         console.log(`✅ Reportes encontrados: ${reportes.length}`);
+
 
         res.json({
             success: true,
             count: reportes.length,
-            data: reportes
+            data: reportesConConteo
         });
 
     } catch (error) {
@@ -332,8 +487,7 @@ const updateReporte = async (req, res) => {
         } = req.body;
 
         const reporte = await Reporte.findById(id);
-        console.log('📄 REPORTE ENCONTRADO:')
-        console.log(reporte)
+
 
         if (!reporte) {
             return res.status(404).json({ error: 'Reporte no encontrado' });
@@ -344,20 +498,24 @@ const updateReporte = async (req, res) => {
             return res.status(403).json({ error: 'No autorizado para modificar este reporte' });
         }
 
-        if (estado && estado !== reporte.estado) {
-
-            reporte.historialEstados.push({
-               estado,
-               fecha: new Date(),
-               usuarioId: req.auth.userId,
-               usuarioNombre:
-                 `${user?.nombre || ''} ${user?.apellido || ''}`.trim(),
-               observacion:
-                  observaciones || `Cambio de estado a ${estado}`
+if (estado && estado !== reporte.estado) {
+    if (!validarTransicionEstado(reporte.estado, estado)) {
+        return res.status(400).json({
+            error: 'Transición de estado no permitida',
+            estadoActual: reporte.estado,
+            estadoSolicitado: estado,
+            estadosPermitidos: TRANSICIONES_VALIDAS[reporte.estado] || []
         });
+    }
 
-        reporte.estado = estado;
-} 
+    registrarCambioEstado(
+        reporte,
+        estado,
+        req.auth.userId,
+        `${user?.nombre || ''} ${user?.apellido || ''}`.trim(),
+        observaciones || `Cambio de estado a ${estado}`
+    );
+}
 
          console.log('📝 NUEVO ESTADO:', reporte.estado)
         
@@ -377,9 +535,7 @@ const updateReporte = async (req, res) => {
         }
 
         await reporte.save();
-        console.log('✅ REPORTE GUARDADO:')
-        console.log(reporte)
-
+        
 
         res.json({ success: true, message: 'Reporte actualizado', data: reporte });
     } catch (error) {
@@ -388,6 +544,7 @@ const updateReporte = async (req, res) => {
         res.status(500).json({ error: 'Error al actualizar reporte' });
     }
 };
+
 
 // Eliminar reporte
 const deleteReporte = async (req, res) => {
@@ -445,16 +602,24 @@ const tomarReporte = async (req, res) => {
             });
         }
 
+        if (!validarTransicionEstado(reporte.estado, 'en_proceso')) {
+            return res.status(400).json({
+                error: 'No se puede tomar este incidente desde su estado actual',
+                estadoActual: reporte.estado,
+                estadosPermitidos: TRANSICIONES_VALIDAS[reporte.estado] || []
+            });
+        }
+
         reporte.operadorAsignadoId = operador.clerkUserId;
         reporte.operadorAsignadoNombre = `${operador.nombre || ''} ${operador.apellido || ''}`.trim();
-        reporte.estado = 'en_proceso';
-        reporte.historialEstados.push({
-             estado: 'en_proceso',
-             fecha: new Date(),
-             usuarioId: operador.clerkUserId,
-             usuarioNombre: reporte.operadorAsignadoNombre,
-             observacion: 'Incidente tomado por operador'
-    });
+        
+        registrarCambioEstado(
+    reporte,
+    'en_proceso',
+    operador.clerkUserId,
+    reporte.operadorAsignadoNombre,
+    'Incidente tomado por operador'
+);
         reporte.updatedAt = Date.now();
 
         await reporte.save();
@@ -467,6 +632,195 @@ const tomarReporte = async (req, res) => {
     } catch (error) {
         console.error('Error tomando reporte:', error);
         res.status(500).json({ error: 'Error al tomar incidente' });
+    }
+};
+
+const asignarOperador = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { operadorId } = req.body;
+
+        const admin = await ensureUserExists(req.auth.userId);
+        const operador = await User.findOne({ clerkUserId: operadorId });
+
+        if (!operador) {
+            return res.status(404).json({ error: 'Operador no encontrado' });
+        }
+
+        const reporte = await Reporte.findById(id);
+
+        if (!reporte) {
+            return res.status(404).json({ error: 'Reporte no encontrado' });
+        }
+
+        if (reporte.operadorAsignadoId) {
+            return res.status(400).json({
+                error: 'Este incidente ya tiene operador asignado'
+            });
+        }
+
+        if (reporte.municipio !== operador.municipio) {
+            return res.status(403).json({
+                error: 'El operador no pertenece al municipio del incidente'
+            });
+        }
+
+        reporte.operadorAsignadoId = operador.clerkUserId;
+        reporte.operadorAsignadoNombre = `${operador.nombre || ''} ${operador.apellido || ''}`.trim();
+
+        registrarCambioEstado(
+            reporte,
+            'asignado',
+            admin.clerkUserId,
+            `${admin.nombre || ''} ${admin.apellido || ''}`.trim(),
+            `Incidente asignado a ${reporte.operadorAsignadoNombre}`
+        );
+
+        reporte.updatedAt = Date.now();
+
+        await reporte.save();
+
+        res.json({
+            success: true,
+            message: 'Operador asignado correctamente',
+            data: reporte
+        });
+    } catch (error) {
+        console.error('Error asignando operador:', error);
+        res.status(500).json({ error: 'Error al asignar operador' });
+    }
+};
+
+
+const cambiarEstadoReporte = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { estado, observacion = '' } = req.body;
+
+        if (!estado) {
+            return res.status(400).json({ error: 'El nuevo estado es obligatorio' });
+        }
+
+        const reporte = await Reporte.findById(id);
+        if (!reporte) {
+            return res.status(404).json({ error: 'Reporte no encontrado' });
+        }
+
+        if (ESTADOS_FINALES.includes(reporte.estado)) {
+            return res.status(400).json({
+                error: `El incidente ya está en estado final: ${reporte.estado}`
+            });
+        }
+
+        if (!validarTransicionEstado(reporte.estado, estado)) {
+            return res.status(400).json({
+                error: 'Transición de estado no permitida',
+                estadoActual: reporte.estado,
+                estadoSolicitado: estado,
+                estadosPermitidos: TRANSICIONES_VALIDAS[reporte.estado] || []
+            });
+        }
+
+        const usuario = await ensureUserExists(req.auth.userId);
+        const usuarioNombre = `${usuario.nombre || ''} ${usuario.apellido || ''}`.trim() || usuario.email;
+
+        registrarCambioEstado(
+            reporte,
+            estado,
+            usuario.clerkUserId,
+            usuarioNombre,
+            observacion || `Cambio de estado: ${reporte.estado} → ${estado}`
+        );
+
+        reporte.updatedAt = Date.now();
+        await reporte.save();
+
+        res.json({
+            success: true,
+            message: 'Estado actualizado correctamente',
+            data: reporte,
+            metricas: calcularMetricasReporte(reporte)
+        });
+    } catch (error) {
+        console.error('Error cambiando estado del reporte:', error);
+        res.status(500).json({ error: 'Error al cambiar estado del incidente' });
+    }
+};
+
+const getMetricasWorkflow = async (req, res) => {
+    try {
+        const { municipio, operadorId } = req.query;
+        const filtro = {};
+
+        if (municipio) filtro.municipio = municipio;
+        if (operadorId) filtro.operadorAsignadoId = operadorId;
+
+        const reportes = await Reporte.find(filtro).lean();
+
+        const acumulado = {
+            total: reportes.length,
+            cerrados: 0,
+            rechazados: 0,
+            tiempoAceptacionTotal: 0,
+            tiempoAceptacionCount: 0,
+            tiempoResolucionTotal: 0,
+            tiempoResolucionCount: 0,
+            tiempoCierreTotal: 0,
+            tiempoCierreCount: 0,
+            porOperador: {},
+            porMunicipio: {}
+        };
+
+        reportes.forEach((reporte) => {
+            const metricas = calcularMetricasReporte(reporte);
+
+            if (reporte.estado === 'cerrado') acumulado.cerrados += 1;
+            if (reporte.estado === 'rechazado') acumulado.rechazados += 1;
+
+            if (metricas.tiempoAceptacionMinutos !== null) {
+                acumulado.tiempoAceptacionTotal += metricas.tiempoAceptacionMinutos;
+                acumulado.tiempoAceptacionCount += 1;
+            }
+
+            if (metricas.tiempoResolucionMinutos !== null) {
+                acumulado.tiempoResolucionTotal += metricas.tiempoResolucionMinutos;
+                acumulado.tiempoResolucionCount += 1;
+            }
+
+            if (metricas.tiempoCierreMinutos !== null) {
+                acumulado.tiempoCierreTotal += metricas.tiempoCierreMinutos;
+                acumulado.tiempoCierreCount += 1;
+            }
+
+            const operadorKey = reporte.operadorAsignadoNombre || reporte.operadorAsignadoId || 'Sin operador';
+            const municipioKey = reporte.municipio || 'Sin municipio';
+
+            acumulado.porOperador[operadorKey] = (acumulado.porOperador[operadorKey] || 0) + 1;
+            acumulado.porMunicipio[municipioKey] = (acumulado.porMunicipio[municipioKey] || 0) + 1;
+        });
+
+        res.json({
+            success: true,
+            data: {
+                totalIncidentes: acumulado.total,
+                cerrados: acumulado.cerrados,
+                rechazados: acumulado.rechazados,
+                tiempoPromedioAceptacionMinutos: acumulado.tiempoAceptacionCount
+                    ? Math.round(acumulado.tiempoAceptacionTotal / acumulado.tiempoAceptacionCount)
+                    : null,
+                tiempoPromedioResolucionMinutos: acumulado.tiempoResolucionCount
+                    ? Math.round(acumulado.tiempoResolucionTotal / acumulado.tiempoResolucionCount)
+                    : null,
+                tiempoPromedioCierreMinutos: acumulado.tiempoCierreCount
+                    ? Math.round(acumulado.tiempoCierreTotal / acumulado.tiempoCierreCount)
+                    : null,
+                porOperador: acumulado.porOperador,
+                porMunicipio: acumulado.porMunicipio
+            }
+        });
+    } catch (error) {
+        console.error('Error obteniendo métricas workflow:', error);
+        res.status(500).json({ error: 'Error al obtener métricas de workflow' });
     }
 };
 
@@ -490,10 +844,71 @@ const updateCategoriaIA = async (req, res) => {
             return res.status(404).json({ error: 'Reporte no encontrado' });
         }
 
+
         res.json({ success: true, data: reporte });
     } catch (error) {
         console.error('Error al actualizar categoría IA:', error);
         res.status(500).json({ error: 'Error al actualizar categoría' });
+    }
+};
+
+const vincularIncidente = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { incidentePrincipalId } = req.body;
+
+        if (id === incidentePrincipalId) {
+            return res.status(400).json({
+                error: 'Un incidente no puede vincularse consigo mismo'
+            });
+        }
+
+        const reporte = await Reporte.findById(id);
+        const principal = await Reporte.findById(incidentePrincipalId);
+
+        if (!reporte || !principal) {
+            return res.status(404).json({
+                error: 'Reporte o incidente principal no encontrado'
+            });
+        }
+
+        reporte.incidenteGrupoId = principal._id;
+        reporte.esIncidentePrincipal = false;
+        reporte.posible_duplicado = true;
+        reporte.reporte_duplicado_id = principal._id;
+
+        if (!principal.reportesRelacionados) {
+            principal.reportesRelacionados = [];
+        }
+
+        const yaRelacionado = principal.reportesRelacionados.some(
+            item => item.toString() === reporte._id.toString()
+        );
+
+        if (!yaRelacionado) {
+            principal.reportesRelacionados.push(reporte._id);
+        }
+
+        principal.esIncidentePrincipal = true;
+        principal.updatedAt = Date.now();
+        reporte.updatedAt = Date.now();
+
+        await reporte.save();
+        await principal.save();
+
+        res.json({
+            success: true,
+            message: 'Incidente vinculado al grupo correctamente',
+            data: {
+                principal,
+                reporteVinculado: reporte
+            }
+        });
+    } catch (error) {
+        console.error('Error vinculando incidente:', error);
+        res.status(500).json({
+            error: 'Error al vincular incidente'
+        });
     }
 };
 
@@ -505,5 +920,9 @@ module.exports = {
     updateReporte,
     deleteReporte,
     tomarReporte,
+    asignarOperador,
+    vincularIncidente,
+    cambiarEstadoReporte,
+    getMetricasWorkflow,
     updateCategoriaIA
 };

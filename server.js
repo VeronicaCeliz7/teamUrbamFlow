@@ -69,6 +69,9 @@ app.listen(PORT, () => {
     console.log(`   GET    /api/reportes/mis-reportes`);
     console.log(`   GET    /api/reportes/:id`);
     console.log(`   PUT    /api/reportes/:id`);
+    console.log('   PATCH  /api/reportes/:id/tomar');
+    console.log('   PATCH  /api/reportes/:id/asignar-operador');
+    console.log('   PATCH  /api/reportes/:id/vincular');
     console.log(`   DELETE /api/reportes/:id`);
     console.log(`   PUT    /api/reportes/:id/categoria-ia (admin)`);
 

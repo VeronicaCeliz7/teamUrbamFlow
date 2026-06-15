@@ -8,11 +8,23 @@ const reporteController = require('../controllers/reporteController');
 // Rutas protegidas
 router.post('/', authMiddleware, reporteController.createReporte);
 router.get('/mis-reportes', authMiddleware, reporteController.getMisReportes);
+router.get('/workflow/metricas', authMiddleware, reporteController.getMetricasWorkflow);
 
-// Tomar incidente por operador
 router.patch('/:id/tomar', authMiddleware, reporteController.tomarReporte);
+router.patch('/:id/estado', authMiddleware, reporteController.cambiarEstadoReporte);
 
-// CRUD reportes
+router.patch(
+  '/:id/asignar-operador',
+  authMiddleware,
+  reporteController.asignarOperador
+);
+
+router.patch(
+  '/:id/vincular',
+  authMiddleware,
+  reporteController.vincularIncidente
+);
+
 router.get('/:id', authMiddleware, reporteController.getReporteById);
 router.put('/:id', authMiddleware, reporteController.updateReporte);
 router.delete('/:id', authMiddleware, reporteController.deleteReporte);
@@ -27,5 +39,6 @@ router.put(
   adminMiddleware,
   reporteController.updateCategoriaIA
 );
+
 
 module.exports = router;
