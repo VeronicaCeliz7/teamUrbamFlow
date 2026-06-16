@@ -5,7 +5,17 @@ info:
 
 http:
   method: GET
-  url: http://localhost:3001/api/super/reportes
+  url: http://localhost:3001/api/reportes?municipio=villa-maria&estado=pendiente&sinAsignar=true
+  params:
+    - name: municipio
+      value: villa-maria
+      type: query
+    - name: estado
+      value: pendiente
+      type: query
+    - name: sinAsignar
+      value: "true"
+      type: query
   auth: inherit
 
 settings:

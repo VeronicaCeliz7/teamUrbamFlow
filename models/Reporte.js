@@ -1,10 +1,48 @@
 const mongoose = require('mongoose');
 
+const ESTADOS_REPORTE = [
+  'reportado',
+  'validacion_inicial',
+  'aceptado',
+  'asignado',
+  'en_proceso',
+  'resuelto',
+  'verificado',
+  'cerrado',
+  'rechazado',
+  'duplicado',
+  'informacion_insuficiente',
+  'fuera_de_jurisdiccion',
+
+  // Compatibilidad con datos viejos
+  'pendiente'
+];
+
+const CATEGORIAS_REPORTE = [
+  'bache',
+  'basura',
+  'luminaria',
+  'semaforo',
+  'seguridad',
+  'animal_suelto',
+  'arbolado',
+  'agua_cloaca',
+  'transito',
+  'otros'
+];
+
+const PRIORIDADES_REPORTE = [
+  'baja',
+  'media',
+  'alta',
+  'critica'
+];
+
 const HistorialEstadoSchema = new mongoose.Schema(
   {
     estado: {
       type: String,
-      enum: ['pendiente', 'en_proceso', 'resuelto', 'rechazado'],
+      enum: ESTADOS_REPORTE,
       required: true
     },
     fecha: {
@@ -27,6 +65,23 @@ const HistorialEstadoSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const EvidenciaSchema = new mongoose.Schema(
+  {
+    url: { type: String, required: true },
+    publicId: { type: String, default: null },
+    tipo: {
+      type: String,
+      enum: ['image', 'video', 'documento'],
+      default: 'image'
+    },
+    descripcion: { type: String, default: '' },
+    subidoPorId: { type: String, default: null },
+    subidoPorNombre: { type: String, default: '' },
+    fecha: { type: Date, default: Date.now }
+  },
+  { _id: false }
+);
+
 const ReporteSchema = new mongoose.Schema({
   // Relación con el usuario ciudadano que reporta
   usuarioId: { type: String, required: true },
@@ -42,6 +97,9 @@ const ReporteSchema = new mongoose.Schema({
 
   // Territorio / municipio responsable
   municipio: { type: String, default: '' },
+  localidad: { type: String, default: '' },
+  provincia: { type: String, default: 'Córdoba' },
+  pais: { type: String, default: 'Argentina' },
 
   // Operador asignado
   operadorAsignadoId: { type: String, default: null },
@@ -55,12 +113,9 @@ const ReporteSchema = new mongoose.Schema({
   direccion: { type: String, required: true },
   latitud: { type: Number, required: true },
   longitud: { type: Number, required: true },
-  localidad: { type: String },
-  provincia: { type: String },
-  pais: { type: String, default: 'Argentina' },
 
   // Detalles adicionales
-  observaciones: { type: String },
+  observaciones: { type: String, default: '' },
 
   // Archivo multimedia original del ciudadano
   archivo_url: { type: String },
@@ -71,13 +126,20 @@ const ReporteSchema = new mongoose.Schema({
     default: null
   },
 
-  // Categorización por IA
+  // Categoría operativa normalizada
+  categoria: {
+    type: String,
+    enum: CATEGORIAS_REPORTE,
+    default: 'otros'
+  },
+
+  // Categorización por IA / compatibilidad
   categoria_asignada_por_ia: { type: String, default: null },
   ia_procesado: { type: Boolean, default: false },
 
   prioridad: {
     type: String,
-    enum: ['baja', 'media', 'alta', 'critica'],
+    enum: PRIORIDADES_REPORTE,
     default: 'media'
   },
 
@@ -162,8 +224,8 @@ embedding_actualizado_en: {
   // Estado actual del reporte
   estado: {
     type: String,
-    enum: ['pendiente', 'en_proceso', 'resuelto', 'rechazado'],
-    default: 'pendiente'
+    enum: ESTADOS_REPORTE,
+    default: 'reportado'
   },
 
   // Historial de estados para trazabilidad
@@ -171,6 +233,24 @@ embedding_actualizado_en: {
     type: [HistorialEstadoSchema],
     default: []
   },
+
+  // Evidencias de gestión / resolución cargadas por operador
+  evidenciasResolucion: {
+    type: [EvidenciaSchema],
+    default: []
+  },
+
+  // Datos de cierre / verificación
+  fechaAsignacion: { type: Date, default: null },
+  fechaResolucion: { type: Date, default: null },
+  fechaVerificacion: { type: Date, default: null },
+  fechaCierre: { type: Date, default: null },
+
+  verificadoPorId: { type: String, default: null },
+  verificadoPorNombre: { type: String, default: null },
+
+  motivoRechazo: { type: String, default: '' },
+  motivoCierre: { type: String, default: '' },
 
   // Demo
   esDemo: { type: Boolean, default: false },
@@ -187,9 +267,11 @@ ReporteSchema.index({ usuarioId: 1 });
 ReporteSchema.index({ estado: 1 });
 ReporteSchema.index({ clienteId: 1 });
 ReporteSchema.index({ prioridad: 1 });
+ReporteSchema.index({ categoria: 1 });
 ReporteSchema.index({ categoria_asignada_por_ia: 1 });
 ReporteSchema.index({ esDemo: 1 });
 ReporteSchema.index({ municipio: 1 });
+ReporteSchema.index({ localidad: 1 });
 ReporteSchema.index({ operadorAsignadoId: 1 });
 ReporteSchema.index({ createdAt: -1 });
 ReporteSchema.index({ vectorizado: 1 });
