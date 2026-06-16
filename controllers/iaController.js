@@ -1,10 +1,4 @@
-const OpenAI = require('openai');
 const Reporte = require('../models/Reporte');
-
-const deepseek = new OpenAI({
-    apiKey: process.env.DEEPSEEK_API_KEY,
-    baseURL: 'https://api.deepseek.com'
-});
 
 const categoriasPermitidas = [
   'bache',
@@ -20,187 +14,149 @@ const categoriasPermitidas = [
   'otro'
 ];
 
-function normalizarTexto(texto) {
-    return String(texto || '')
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '');
+const prioridadesPermitidas = ['baja', 'media', 'alta', 'critica'];
+
+function normalizarTexto(texto = '') {
+  return texto
+    .toString()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-function scorePrioridad(prioridad) {
-    if (prioridad === 'critica') return 95;
-    if (prioridad === 'alta') return 78;
-    if (prioridad === 'media') return 55;
-    if (prioridad === 'baja') return 30;
-    return 25;
-}
-
-function clasificacionFallback(texto, motivo = 'fallback-demo') {
-    const textoNormalizado = normalizarTexto(texto);
-
-    let categoria = 'otro';
-    let prioridad = 'media';
-    let riesgo = 'operativo';
-    let accion_sugerida = 'Revisar el incidente y derivarlo al área correspondiente.';
-    const etiquetas = [];
-
-    if (
-        textoNormalizado.includes('agua') ||
-        textoNormalizado.includes('perdida') ||
-        textoNormalizado.includes('pérdida') ||
-        textoNormalizado.includes('fuga') ||
-        textoNormalizado.includes('caño') ||
-        textoNormalizado.includes('cano')
-    ) {
-        categoria = 'agua';
-        prioridad = 'alta';
-        riesgo = 'deterioro de calzada o afectación del servicio';
-        accion_sugerida = 'Derivar al área de agua y saneamiento para inspección urgente.';
-        etiquetas.push('agua', 'fuga', 'servicio-publico');
-    }
+function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const rad = Math.PI / 180;
 
   const dLat = (Number(lat2) - Number(lat1)) * rad;
   const dLon = (Number(lon2) - Number(lon1)) * rad;
 
-    if (
-        textoNormalizado.includes('basura') ||
-        textoNormalizado.includes('residuos') ||
-        textoNormalizado.includes('olor') ||
-        textoNormalizado.includes('basural') ||
-        textoNormalizado.includes('microbasural') ||
-        textoNormalizado.includes('contenedor')
-    ) {
-        categoria = textoNormalizado.includes('microbasural') || textoNormalizado.includes('basural')
-            ? 'microbasural'
-            : 'basura';
-        prioridad = prioridad === 'critica' ? 'critica' : 'media';
-        riesgo = 'riesgo sanitario';
-        accion_sugerida = 'Derivar a higiene urbana para retiro y control del foco.';
-        etiquetas.push('basura', 'higiene-urbana', 'riesgo-sanitario');
-    }
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(Number(lat1) * rad) *
+      Math.cos(Number(lat2) * rad) *
+      Math.sin(dLon / 2) ** 2;
 
-    if (
-        textoNormalizado.includes('luz') ||
-        textoNormalizado.includes('alumbrado') ||
-        textoNormalizado.includes('lampara') ||
-        textoNormalizado.includes('lámpara') ||
-        textoNormalizado.includes('luminaria') ||
-        textoNormalizado.includes('farola')
-    ) {
-        categoria = 'alumbrado';
-        prioridad = prioridad === 'critica' ? 'critica' : 'media';
-        riesgo = 'baja visibilidad y percepción de inseguridad';
-        accion_sugerida = 'Derivar al área de alumbrado público para revisión técnica.';
-        etiquetas.push('alumbrado', 'luminaria', 'seguridad');
-    }
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 function similitudTexto(a = '', b = '') {
   const palabrasA = new Set(normalizarTexto(a).split(' ').filter(Boolean));
   const palabrasB = new Set(normalizarTexto(b).split(' ').filter(Boolean));
 
-    if (
-        textoNormalizado.includes('perro') ||
-        textoNormalizado.includes('animal') ||
-        textoNormalizado.includes('caballo')
-    ) {
-        categoria = 'animal_suelto';
-        prioridad = prioridad === 'media' ? 'alta' : prioridad;
-        riesgo = 'riesgo para peatones, ciclistas y tránsito';
-        accion_sugerida = 'Derivar a zoonosis o control animal.';
-        etiquetas.push('animal-suelto', 'seguridad');
-    }
-
-    if (
-        textoNormalizado.includes('ruido') ||
-        textoNormalizado.includes('musica') ||
-        textoNormalizado.includes('música') ||
-        textoNormalizado.includes('sonora')
-    ) {
-        categoria = 'ruido';
-        prioridad = 'media';
-        riesgo = 'afectación de convivencia urbana';
-        accion_sugerida = 'Derivar al área de inspección o convivencia ciudadana.';
-        etiquetas.push('ruido', 'convivencia');
-    }
-
-    if (
-        textoNormalizado.includes('vereda') ||
-        textoNormalizado.includes('baldosa') ||
-        textoNormalizado.includes('peatonal')
-    ) {
-        categoria = 'vereda';
-        prioridad = prioridad === 'media' ? 'alta' : prioridad;
-        riesgo = 'riesgo de caída peatonal';
-        accion_sugerida = 'Derivar al área de obras públicas.';
-        etiquetas.push('vereda', 'peatonal');
-    }
-
-    if (
-        textoNormalizado.includes('inseguridad') ||
-        textoNormalizado.includes('sospechoso') ||
-        textoNormalizado.includes('visibilidad')
-    ) {
-        categoria = 'inseguridad';
-        prioridad = prioridad === 'media' ? 'alta' : prioridad;
-        riesgo = 'percepción de inseguridad o riesgo ciudadano';
-        accion_sugerida = 'Derivar al área de seguridad ciudadana.';
-        etiquetas.push('seguridad', 'prevencion');
-    }
-
-    if (
-        textoNormalizado.includes('escuela') ||
-        textoNormalizado.includes('hospital') ||
-        textoNormalizado.includes('avenida') ||
-        textoNormalizado.includes('ruta')
-    ) {
-        prioridad = prioridad === 'media' ? 'alta' : prioridad;
-        etiquetas.push('zona-sensible');
-    }
+  if (palabrasA.size === 0 || palabrasB.size === 0) return 0;
 
   const interseccion = [...palabrasA].filter((p) => palabrasB.has(p)).length;
   const union = new Set([...palabrasA, ...palabrasB]).size;
 
-    return {
-        ok: true,
-        proveedor: motivo,
-        modelo: 'fallback-local-urbanflow',
-        input: { texto },
-        ia: {
-            categoria,
-            prioridad,
-            resumen: `Incidente clasificado como ${categoria} con prioridad ${prioridad}.`,
-            etiquetas: etiquetasUnicas.length > 0 ? etiquetasUnicas : ['revision-manual'],
-            riesgo,
-            accion_sugerida,
-            ai_priority_score: scorePrioridad(prioridad)
-        }
-    };
+  return interseccion / union;
 }
 
-function normalizarRespuestaIA(ia) {
-    const categoria = categoriasPermitidas.includes(ia.categoria)
-        ? ia.categoria
-        : 'otro';
+function clasificacionFallback(texto, motivo = 'fallback-local') {
+  const t = normalizarTexto(texto);
 
-    const prioridad = prioridadesPermitidas.includes(ia.prioridad)
-        ? ia.prioridad
-        : 'media';
+  let categoria = 'otro';
+  let prioridad = 'baja';
+  let riesgo = 'requiere revisión operativa';
+  let accion_sugerida = 'Revisar el incidente y derivarlo al área correspondiente.';
+  let ai_priority_score = 25;
+  const etiquetas = [];
 
-    return {
-        categoria,
-        prioridad,
-        resumen: ia.resumen || `Incidente clasificado como ${categoria}.`,
-        etiquetas: Array.isArray(ia.etiquetas) ? ia.etiquetas : [],
-        riesgo: ia.riesgo || 'No determinado',
-        accion_sugerida: ia.accion_sugerida || 'Revisión manual del incidente.',
-        ai_priority_score: scorePrioridad(prioridad)
-    };
+  if (t.includes('agua') || t.includes('perdida') || t.includes('fuga') || t.includes('cano') || t.includes('caño')) {
+    categoria = 'agua';
+    prioridad = 'alta';
+    riesgo = 'posible afectación del servicio o deterioro de calzada';
+    accion_sugerida = 'Derivar al área de agua y saneamiento para inspección.';
+    ai_priority_score = 75;
+    etiquetas.push('agua', 'fuga', 'servicio-publico');
+  }
+
+  if (t.includes('bache') || t.includes('pozo') || t.includes('calle rota') || t.includes('calzada')) {
+    categoria = 'bache';
+    prioridad = 'alta';
+    riesgo = 'riesgo vial';
+    accion_sugerida = 'Priorizar reparación vial y señalización preventiva.';
+    ai_priority_score = 80;
+    etiquetas.push('bache', 'seguridad-vial', 'calzada');
+  }
+
+  if (t.includes('basura') || t.includes('residuos') || t.includes('olor') || t.includes('microbasural')) {
+    categoria = t.includes('microbasural') ? 'microbasural' : 'basura';
+    prioridad = 'media';
+    riesgo = 'riesgo sanitario';
+    accion_sugerida = 'Derivar a higiene urbana para retiro y control.';
+    ai_priority_score = 55;
+    etiquetas.push('basura', 'higiene-urbana', 'riesgo-sanitario');
+  }
+
+  if (t.includes('luz') || t.includes('alumbrado') || t.includes('lampara') || t.includes('luminaria')) {
+    categoria = 'alumbrado';
+    prioridad = 'media';
+    riesgo = 'baja visibilidad y percepción de inseguridad';
+    accion_sugerida = 'Derivar al área de alumbrado público.';
+    ai_priority_score = 50;
+    etiquetas.push('alumbrado', 'luminaria', 'seguridad');
+  }
+
+  if (t.includes('semaforo') || t.includes('semáforo')) {
+    categoria = 'semaforo';
+    prioridad = 'critica';
+    riesgo = 'riesgo vial alto';
+    accion_sugerida = 'Intervenir de forma urgente.';
+    ai_priority_score = 95;
+    etiquetas.push('semaforo', 'transito', 'urgente');
+  }
+
+  if (t.includes('escuela') || t.includes('hospital') || t.includes('avenida') || t.includes('ruta')) {
+    if (prioridad === 'baja') prioridad = 'media';
+    ai_priority_score = Math.max(ai_priority_score, 65);
+    etiquetas.push('zona-sensible');
+  }
+
+  return {
+    proveedor: motivo,
+    modelo: 'fallback-local-urbanflow',
+    categoria,
+    prioridad,
+    resumen: `Incidente clasificado como ${categoria} con prioridad ${prioridad}.`,
+    etiquetas: [...new Set(etiquetas.length ? etiquetas : ['revision-manual'])],
+    riesgo,
+    accion_sugerida,
+    ai_priority_score
+  };
 }
 
-async function clasificarTextoUrbanFlow(texto) {
-    if (!process.env.DEEPSEEK_API_KEY) {
-        return clasificacionFallback(texto, 'fallback-demo-sin-api-key');
-    }
+function normalizarRespuestaIA(ia, textoOriginal) {
+  const categoria = categoriasPermitidas.includes(ia?.categoria) ? ia.categoria : 'otro';
+  const prioridad = prioridadesPermitidas.includes(ia?.prioridad) ? ia.prioridad : 'baja';
+
+  let score = Number(ia?.ai_priority_score);
+  if (Number.isNaN(score)) score = prioridad === 'critica' ? 95 : prioridad === 'alta' ? 75 : prioridad === 'media' ? 50 : 25;
+  score = Math.max(0, Math.min(100, score));
+
+  return {
+    proveedor: 'Gemini',
+    modelo: process.env.GEMINI_MODEL || 'gemini-flash-latest',
+    categoria,
+    prioridad,
+    resumen: ia?.resumen || `Incidente urbano: ${textoOriginal.slice(0, 120)}`,
+    etiquetas: Array.isArray(ia?.etiquetas) ? ia.etiquetas.slice(0, 8) : [],
+    riesgo: ia?.riesgo || 'No determinado',
+    accion_sugerida: ia?.accion_sugerida || 'Revisión manual del incidente.',
+    ai_priority_score: score
+  };
+}
+
+async function llamarGemini(texto) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+
+  if (!apiKey) {
+    return clasificacionFallback(texto, 'fallback-sin-gemini-api-key');
+  }
 
   const prompt = `
 Sos el motor de inteligencia urbana de UrbanFlow.
@@ -233,26 +189,18 @@ Formato obligatorio:
 }
 `;
 
-        const completion = await deepseek.chat.completions.create({
-            model: 'deepseek-chat',
-            messages: [
-                {
-                    role: 'system',
-                    content: 'Respondés siempre JSON válido para sistemas backend. No uses markdown.'
-                },
-                {
-                    role: 'user',
-                    content: prompt
-                }
-            ],
-            temperature: 0.2,
-            max_tokens: 500
-        });
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-        const rawContent = completion.choices?.[0]?.message?.content;
-
-        if (!rawContent) {
-            return clasificacionFallback(texto, 'fallback-demo-respuesta-vacia');
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-goog-api-key': apiKey
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [{ text: prompt }]
         }
       ],
       generationConfig: {
@@ -288,124 +236,129 @@ Formato obligatorio:
 async function detectarDuplicadoReporte(reporte, iaResultado) {
   const radioMetros = Number(process.env.IA_DUPLICADO_RADIO_METROS || 20);
 
-        try {
-            ia = JSON.parse(rawContent);
-        } catch {
-            return clasificacionFallback(texto, 'fallback-demo-json-invalido');
-        }
+  if (!reporte?.latitud || !reporte?.longitud) {
+    return {
+      posible_duplicado: false,
+      reporte_duplicado_id: null,
+      duplicado_score: 0,
+      duplicado_distancia_metros: null
+    };
+  }
 
-        return {
-            ok: true,
-            proveedor: 'DeepSeek',
-            modelo: 'deepseek-chat',
-            input: { texto },
-            ia: normalizarRespuestaIA(ia)
-        };
-    } catch (error) {
-        return {
-            ...clasificacionFallback(texto, 'fallback-demo-error-api'),
-            error_api: error.message
-        };
+  const margenLat = radioMetros / 111320;
+  const margenLng = radioMetros / (111320 * Math.cos(Number(reporte.latitud) * Math.PI / 180));
+
+  const candidatos = await Reporte.find({
+    _id: { $ne: reporte._id },
+    estado: { $in: ['pendiente', 'en_proceso'] },
+    latitud: {
+      $gte: Number(reporte.latitud) - margenLat,
+      $lte: Number(reporte.latitud) + margenLat
+    },
+    longitud: {
+      $gte: Number(reporte.longitud) - margenLng,
+      $lte: Number(reporte.longitud) + margenLng
     }
+  })
+    .sort({ createdAt: -1 })
+    .limit(20);
+
+  let mejor = null;
+
+  for (const candidato of candidatos) {
+    const distancia = calcularDistanciaMetros(
+      reporte.latitud,
+      reporte.longitud,
+      candidato.latitud,
+      candidato.longitud
+    );
+
+    if (distancia > radioMetros) continue;
+
+    const textoNuevo = `${reporte.titulo} ${reporte.columna_unica}`;
+    const textoCandidato = `${candidato.titulo} ${candidato.columna_unica}`;
+
+    const scoreTexto = similitudTexto(textoNuevo, textoCandidato);
+    const mismaCategoria =
+      iaResultado?.categoria &&
+      candidato.categoria_asignada_por_ia &&
+      iaResultado.categoria === candidato.categoria_asignada_por_ia;
+
+    const scoreFinal = Math.round(
+      scoreTexto * 70 +
+      (mismaCategoria ? 30 : 0)
+    );
+
+    if (!mejor || scoreFinal > mejor.duplicado_score) {
+      mejor = {
+        posible_duplicado: scoreFinal >= 35 || mismaCategoria,
+        reporte_duplicado_id: candidato._id,
+        duplicado_score: scoreFinal,
+        duplicado_distancia_metros: Math.round(distancia)
+      };
+    }
+  }
+
+  if (!mejor || !mejor.posible_duplicado) {
+    return {
+      posible_duplicado: false,
+      reporte_duplicado_id: null,
+      duplicado_score: 0,
+      duplicado_distancia_metros: null
+    };
+  }
+
+  return mejor;
+}
+
+async function procesarIAReporte(reporte) {
+  const texto = `${reporte.titulo}. ${reporte.columna_unica}. ${reporte.observaciones || ''}`;
+  const ia = await llamarGemini(texto);
+  const duplicado = await detectarDuplicadoReporte(reporte, ia);
+
+  reporte.categoria_asignada_por_ia = ia.categoria;
+    reporte.ia_procesado = true;
+
+    reporte.proveedor_ia = ia.proveedor || 'desconocido';
+    reporte.modelo_ia = ia.modelo || 'desconocido';
+
+    reporte.prioridad = ia.prioridad;
+
+    reporte.etiquetas = ia.etiquetas;
+
+    reporte.ai_summary = ia.resumen;
+
+    reporte.ai_priority_score = ia.ai_priority_score;
+
+    reporte.posible_duplicado = duplicado.posible_duplicado;
+
+    reporte.reporte_duplicado_id =
+    duplicado.reporte_duplicado_id;
+
+    reporte.duplicado_score =
+    duplicado.duplicado_score || 0;
+
+    reporte.duplicado_distancia_metros =
+    duplicado.duplicado_distancia_metros || null;
+  reporte.updatedAt = new Date();
+
+  await reporte.save();
+
+  return {
+    ia,
+    duplicado
+  };
 }
 
 const clasificarIncidente = async (req, res) => {
+  try {
     const { texto } = req.body;
 
     if (!texto || texto.trim().length < 5) {
-        return res.status(400).json({
-            ok: false,
-            mensaje: 'Debe enviar un texto válido para clasificar.'
-        });
-    }
-
-    const resultado = await clasificarTextoUrbanFlow(texto);
-    return res.json(resultado);
-};
-
-const reclasificarIncidentes = async (req, res) => {
-    try {
-        const limite = Number(req.body?.limite || 100);
-
-        const reportes = await Reporte.find({
-            $or: [
-                { categoria_asignada_por_ia: { $exists: false } },
-                { categoria_asignada_por_ia: null },
-                { categoria_asignada_por_ia: '' },
-                { categoria_asignada_por_ia: 'sin_categoria' },
-                { categoria_asignada_por_ia: 'Sin Categoría' }
-            ]
-        })
-            .sort({ createdAt: -1 })
-            .limit(limite);
-
-        const resultados = [];
-        const errores = [];
-
-        for (const reporte of reportes) {
-            try {
-                const texto = [
-                    `Título: ${reporte.titulo || ''}`,
-                    `Descripción: ${reporte.columna_unica || ''}`,
-                    `Dirección: ${reporte.direccion || ''}`,
-                    `Municipio: ${reporte.municipio || ''}`
-                ].join('\n');
-
-                const resultadoIA = await clasificarTextoUrbanFlow(texto);
-                const ia = resultadoIA.ia;
-
-                reporte.categoria_asignada_por_ia = ia.categoria;
-                reporte.prioridad = ia.prioridad;
-                reporte.etiquetas = ia.etiquetas || [];
-                reporte.ai_summary = ia.resumen;
-                reporte.ai_priority_score = ia.ai_priority_score || scorePrioridad(ia.prioridad);
-                reporte.ia_procesado = true;
-                reporte.proveedor_ia = resultadoIA.proveedor || 'fallback-local';
-                reporte.modelo_ia = resultadoIA.modelo || 'fallback-local-urbanflow';
-
-                // Como cambia la clasificación, invalidamos embedding para regenerarlo actualizado
-                reporte.vectorizado = false;
-                reporte.vector_modelo = null;
-                reporte.embedding = [];
-                reporte.embedding_dimensiones = 0;
-                reporte.embedding_actualizado_en = null;
-
-                await reporte.save();
-
-                resultados.push({
-                    id: reporte._id,
-                    titulo: reporte.titulo,
-                    categoria: reporte.categoria_asignada_por_ia,
-                    prioridad: reporte.prioridad,
-                    score: reporte.ai_priority_score,
-                    vectorizado: reporte.vectorizado
-                });
-            } catch (error) {
-                errores.push({
-                    id: reporte._id,
-                    titulo: reporte.titulo,
-                    error: error.message
-                });
-            }
-        }
-
-        return res.json({
-            ok: true,
-            encontrados: reportes.length,
-            procesados: resultados.length,
-            errores: errores.length,
-            mensaje: 'Reclasificación finalizada. Ejecutar luego /api/ia/vectorizar-pendientes para regenerar embeddings actualizados.',
-            resultados,
-            errores_detalle: errores
-        });
-    } catch (error) {
-        console.error('Error reclasificando incidentes:', error);
-
-        return res.status(500).json({
-            ok: false,
-            mensaje: 'Error al reclasificar incidentes',
-            error: error.message
-        });
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'Debe enviar un texto válido para clasificar.'
+      });
     }
 
     const ia = await llamarGemini(texto);
@@ -460,7 +413,7 @@ const detectarDuplicado = async (req, res) => {
 };
 
 module.exports = {
-    clasificarIncidente,
-    reclasificarIncidentes,
-    clasificarTextoUrbanFlow
+  clasificarIncidente,
+  detectarDuplicado,
+  procesarIAReporte
 };
