@@ -217,13 +217,13 @@ const invitarUsuarioMunicipio = async (req, res) => {
     res.status(500).json({ error: 'Error al crear el usuario' })
   }
 }
+
 // Listar usuarios de un municipio específico
 const listarUsuariosMunicipio = async (req, res) => {
   try {
     const { municipio } = req.query
 
     const filtro = {
-      activo: true,
       rol: { $in: ['operador', 'operator', 'admin'] }
     }
 
@@ -236,13 +236,26 @@ const listarUsuariosMunicipio = async (req, res) => {
     const usuarios = usuariosMongo.map(u => ({
       id: u._id,
       clerkUserId: u.clerkUserId,
-      nombre: `${u.nombre || ''} ${u.apellido || ''}`.trim(),
+
+      nombre: u.nombre || '',
+      apellido: u.apellido || '',
+      nombreCompleto: `${u.nombre || ''} ${u.apellido || ''}`.trim(),
+
       email: u.email || '',
       role: u.rol === 'operator' ? 'operador' : u.rol,
-      municipio: u.municipio || u.localidad || ''
+      municipio: u.municipio || u.localidad || '',
+
+      activo: u.activo !== false,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
+      ultimoAcceso: u.ultimoAcceso || null
     }))
 
-    res.json({ usuarios })
+    res.json({
+      success: true,
+      count: usuarios.length,
+      usuarios
+    })
   } catch (error) {
     console.error('Error listando usuarios municipio:', error)
     res.status(500).json({ error: 'Error al listar usuarios' })
