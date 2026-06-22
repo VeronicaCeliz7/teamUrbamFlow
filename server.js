@@ -22,7 +22,15 @@ console.log('📦 JWT_SECRET:', process.env.JWT_SECRET ? '✅ CONFIGURADO' : '�
 console.log('📦 CLERK_SECRET_KEY:', process.env.CLERK_SECRET_KEY ? '✅ CONFIGURADO' : '❌ FALTA');
 
 // Middlewares
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://team-urbam-flow.vercel.app',
+    'http://localhost:5173'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 // Conectar a MongoDB
