@@ -64,53 +64,58 @@ app.get('/api/protected', require('./middleware/auth').authMiddleware, (req, res
     });
 });
 
-// Iniciar servidor
-app.listen(PORT, () => {
-    console.log(`🚀 Backend corriendo en http://localhost:${PORT}`);
-    console.log(`📡 Endpoints disponibles:`);
-    console.log(`   GET    /api/health`);
-    console.log(`   GET    /api/protected`);
+// Iniciar servidor solo en local
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`🚀 Backend corriendo en http://localhost:${PORT}`);
+        console.log(`📡 Endpoints disponibles:`);
+        console.log(`   GET    /api/health`);
+        console.log(`   GET    /api/protected`);
 
-    console.log(`   ──────── Usuarios ────────`);
-    console.log(`   GET    /api/users/profile`);
-    console.log(`   PUT    /api/users/profile`);
-    console.log(`   DELETE /api/users/profile`);
-    console.log(`   GET    /api/users (admin)`);
-    console.log(`   GET    /api/users/municipio/lista`);
-    console.log(`   POST   /api/users/municipio/invitar`);
+        console.log(`   ──────── Usuarios ────────`);
+        console.log(`   GET    /api/users/profile`);
+        console.log(`   PUT    /api/users/profile`);
+        console.log(`   DELETE /api/users/profile`);
+        console.log(`   GET    /api/users (admin)`);
+        console.log(`   GET    /api/users/municipio/lista`);
+        console.log(`   POST   /api/users/municipio/invitar`);
 
-    console.log(`   ──────── Reportes ────────`);
-    console.log(`   POST   /api/reportes`);
-    console.log(`   GET    /api/reportes`);
-    console.log(`   GET    /api/reportes/mis-reportes`);
-    console.log(`   GET    /api/reportes/:id`);
-    console.log(`   PUT    /api/reportes/:id`);
-    console.log(`   DELETE /api/reportes/:id`);
-    console.log(`   PUT    /api/reportes/:id/categoria-ia (admin)`);
+        console.log(`   ──────── Reportes ────────`);
+        console.log(`   POST   /api/reportes`);
+        console.log(`   GET    /api/reportes`);
+        console.log(`   GET    /api/reportes/mis-reportes`);
+        console.log(`   GET    /api/reportes/:id`);
+        console.log(`   PUT    /api/reportes/:id`);
+        console.log(`   DELETE /api/reportes/:id`);
+        console.log(`   PUT    /api/reportes/:id/categoria-ia (admin)`);
 
-    console.log('   _____ Súper Usuario _____');
-    console.log('   GET    /api/super/dashboard');
-    console.log('   GET    /api/super/clientes');
-    console.log('   GET    /api/super/usuarios');
-    console.log('   GET    /api/super/reportes');
+        console.log('   _____ Súper Usuario _____');
+        console.log('   GET    /api/super/dashboard');
+        console.log('   GET    /api/super/clientes');
+        console.log('   GET    /api/super/usuarios');
+        console.log('   GET    /api/super/reportes');
 
-    console.log('   _____ Business Intelligence / Power BI _____');
-    console.log('   Scope  urbanflow.bi.read');
-    console.log('   GET    /api/bi/health');
-    console.log('   GET    /api/bi/dashboard');
-    console.log('   GET    /api/bi/incidentes');
-    console.log('   GET    /api/bi/usuarios');
-    console.log('   GET    /api/bi/clientes');
+        console.log('   _____ Business Intelligence / Power BI _____');
+        console.log('   Scope  urbanflow.bi.read');
+        console.log('   GET    /api/bi/health');
+        console.log('   GET    /api/bi/dashboard');
+        console.log('   GET    /api/bi/incidentes');
+        console.log('   GET    /api/bi/usuarios');
+        console.log('   GET    /api/bi/clientes');
 
-    console.log(`   ──────── IA ────────`);
-    console.log(`   POST   /api/ia/clasificar`);
-    console.log(`   POST   /api/ia/reclasificar`);
-    console.log(`   POST   /api/ia/vectorizar`);
-    console.log(`   POST   /api/ia/vectorizar-pendientes`);
-    console.log(`   POST   /api/ia/similares`);
-    console.log(`   GET    /api/ia/heatmap`);
+        console.log(`   ──────── IA ────────`);
+        console.log(`   POST   /api/ia/clasificar`);
+        console.log(`   POST   /api/ia/reclasificar`);
+        console.log(`   POST   /api/ia/vectorizar`);
+        console.log(`   POST   /api/ia/vectorizar-pendientes`);
+        console.log(`   POST   /api/ia/similares`);
+        console.log(`   GET    /api/ia/heatmap`);
 
-    console.log(`   ──────── Clima Predictivo ────────`);
-    console.log(`   GET    /api/clima/pronostico`);
-    console.log(`   GET    /api/clima/riesgo`);
-});
+        console.log(`   ──────── Clima Predictivo ────────`);
+        console.log(`   GET    /api/clima/pronostico`);
+        console.log(`   GET    /api/clima/riesgo`);
+    });
+}
+
+// Exportar para Vercel
+module.exports = app;
