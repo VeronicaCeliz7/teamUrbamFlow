@@ -25,6 +25,7 @@ console.log('📦 CLERK_SECRET_KEY:', process.env.CLERK_SECRET_KEY ? '✅ CONFIG
 app.use(cors({
   origin: [
     'https://team-urbam-flow.vercel.app',
+    'https://frontflow-nu.vercel.app',
     'http://localhost:5173'
   ],
   credentials: true,
