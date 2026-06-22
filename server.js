@@ -15,11 +15,18 @@ const climaRoutes = require('./routes/climaRoutes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// LOGS DE INICIO - PARA DEBUG EN VERCEL
+console.log('🚀 INICIANDO SERVIDOR...');
+console.log('📦 MONGODB_URI:', process.env.MONGODB_URI ? '✅ CONFIGURADA' : '❌ FALTA');
+console.log('📦 JWT_SECRET:', process.env.JWT_SECRET ? '✅ CONFIGURADO' : '❌ FALTA');
+console.log('📦 CLERK_SECRET_KEY:', process.env.CLERK_SECRET_KEY ? '✅ CONFIGURADO' : '❌ FALTA');
+
 // Middlewares
 app.use(cors());
 app.use(express.json());
 
 // Conectar a MongoDB
+console.log('⏳ Conectando a MongoDB...');
 connectDB();
 
 // Rutas base
