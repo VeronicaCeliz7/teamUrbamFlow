@@ -13,6 +13,7 @@ router.get('/mis-reportes', authMiddleware, reporteController.getMisReportes);
 router.put('/:id/tomar', authMiddleware, reporteController.tomarReporte);
 router.patch('/:id/tomar', authMiddleware, reporteController.tomarReporte);
 router.patch('/:id/estado', authMiddleware, reporteController.updateReporte);
+router.patch('/:id/asignar-operador', authMiddleware, reporteController.asignarOperador);
 
 // CRUD reportes
 router.get('/:id', authMiddleware, reporteController.getReporteById);

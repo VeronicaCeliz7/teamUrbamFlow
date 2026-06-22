@@ -547,6 +547,53 @@ const updateCategoriaIA = async (req, res) => {
   }
 };
 
+const asignarOperador = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { operadorId, operadorNombre } = req.body;
+
+    if (!operadorId) {
+      return res.status(400).json({ error: 'operadorId es obligatorio' });
+    }
+
+    const reporte = await Reporte.findById(id);
+
+    if (!reporte) {
+      return res.status(404).json({ error: 'Reporte no encontrado' });
+    }
+
+    reporte.operadorAsignadoId = operadorId;
+    reporte.operadorAsignadoNombre = operadorNombre || 'Operador asignado';
+    reporte.estado = 'asignado';
+    reporte.fechaAsignacion = new Date();
+
+    if (!reporte.historialEstados) {
+      reporte.historialEstados = [];
+    }
+
+    reporte.historialEstados.push({
+      estado: 'asignado',
+      fecha: new Date(),
+      usuarioId: req.auth?.userId || null,
+      usuarioNombre: operadorNombre || 'Administrador municipal',
+      observacion: `Asignado manualmente a ${operadorNombre || operadorId}`
+    });
+
+    reporte.updatedAt = Date.now();
+
+    await reporte.save();
+
+    res.json({
+      success: true,
+      message: 'Operador asignado correctamente',
+      data: reporte
+    });
+  } catch (error) {
+    console.error('Error asignarOperador:', error);
+    res.status(500).json({ error: 'Error al asignar operador' });
+  }
+};
+
 module.exports = {
   createReporte,
   getReportes,
@@ -555,5 +602,6 @@ module.exports = {
   updateReporte,
   deleteReporte,
   tomarReporte,
-  updateCategoriaIA
+  updateCategoriaIA,
+  asignarOperador
 };
