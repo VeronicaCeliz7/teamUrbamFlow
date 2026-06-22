@@ -12,6 +12,7 @@ router.get('/mis-reportes', authMiddleware, reporteController.getMisReportes);
 // Tomar incidente por operador
 router.put('/:id/tomar', authMiddleware, reporteController.tomarReporte);
 router.patch('/:id/tomar', authMiddleware, reporteController.tomarReporte);
+router.patch('/:id/estado', authMiddleware, reporteController.updateReporte);
 
 // CRUD reportes
 router.get('/:id', authMiddleware, reporteController.getReporteById);
