@@ -250,7 +250,16 @@ async function detectarDuplicadoReporte(reporte, iaResultado) {
 
   const candidatos = await Reporte.find({
     _id: { $ne: reporte._id },
-    estado: { $in: ['pendiente', 'en_proceso'] },
+    estado: {
+      $in: [
+        'reportado',
+        'validacion_inicial',
+        'aceptado',
+        'asignado',
+        'en_proceso',
+        'pendiente'
+      ]
+    },
     latitud: {
       $gte: Number(reporte.latitud) - margenLat,
       $lte: Number(reporte.latitud) + margenLat
