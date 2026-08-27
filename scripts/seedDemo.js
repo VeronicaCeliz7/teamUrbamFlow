@@ -12,6 +12,17 @@ if (!MONGODB_URI) {
     process.exit(1);
 }
 
+// ==============================================
+// CONFIGURACIÓN - SOLO VILLA MARÍA
+// ==============================================
+const CONFIG = {
+    TOTAL_REPORTES: 1000,        // 1000 reportes para Villa María
+    TOTAL_CIUDADANOS: 700,       // 700 ciudadanos de Villa María
+};
+
+// ==============================================
+// SOLO EL CLIENTE DE VILLA MARÍA
+// ==============================================
 const clientesBase = [
     {
         nombre: 'Municipalidad de Villa María',
@@ -22,316 +33,472 @@ const clientesBase = [
         direccion: 'Centro, Villa María, Córdoba',
         latitud: -32.4075,
         longitud: -63.2402
-    },
-    {
-        nombre: 'Municipalidad de San Francisco',
-        tipo: 'municipio',
-        localidad: 'San Francisco',
-        provincia: 'Córdoba',
-        pais: 'Argentina',
-        direccion: 'Centro, San Francisco, Córdoba',
-        latitud: -31.4276,
-        longitud: -62.0820
-    },
-    {
-        nombre: 'Municipalidad de Bell Ville',
-        tipo: 'municipio',
-        localidad: 'Bell Ville',
-        provincia: 'Córdoba',
-        pais: 'Argentina',
-        direccion: 'Centro, Bell Ville, Córdoba',
-        latitud: -32.6259,
-        longitud: -62.6887
-    },
-    {
-        nombre: 'Campus UNVM',
-        tipo: 'universidad',
-        localidad: 'Villa María',
-        provincia: 'Córdoba',
-        pais: 'Argentina',
-        direccion: 'Campus Universidad Nacional de Villa María',
-        latitud: -32.4324,
-        longitud: -63.2476
-    },
-    {
-        nombre: 'Barrio Privado La Negrita',
-        tipo: 'barrio_privado',
-        localidad: 'Villa María',
-        provincia: 'Córdoba',
-        pais: 'Argentina',
-        direccion: 'La Negrita, Villa María, Córdoba',
-        latitud: -32.3905,
-        longitud: -63.2758
     }
 ];
 
-const categorias = [
-    'bache',
-    'alumbrado',
-    'basura',
-    'agua',
-    'semaforo',
-    'inseguridad',
-    'vereda',
-    'ruido',
-    'animal_suelto',
-    'microbasural'
+// ==============================================
+// CATEGORÍAS PONDERADAS
+// ==============================================
+const categoriasPonderadas = [
+    { categoria: 'bache', peso: 25 },
+    { categoria: 'alumbrado', peso: 20 },
+    { categoria: 'vereda', peso: 15 },
+    { categoria: 'basura', peso: 12 },
+    { categoria: 'agua', peso: 10 },
+    { categoria: 'semaforo', peso: 8 },
+    { categoria: 'microbasural', peso: 5 },
+    { categoria: 'inseguridad', peso: 3 },
+    { categoria: 'ruido', peso: 1 },
+    { categoria: 'animal_suelto', peso: 1 }
 ];
 
-const estados = ['pendiente', 'en_proceso', 'resuelto', 'rechazado'];
+// ==============================================
+// ESTADOS PONDERADOS
+// ==============================================
+const estadosDistribucion = [
+    { estado: 'pendiente', peso: 30 },
+    { estado: 'en_proceso', peso: 25 },
+    { estado: 'resuelto', peso: 35 },
+    { estado: 'rechazado', peso: 10 }
+];
+
 const prioridades = ['baja', 'media', 'alta', 'critica'];
 
+// ==============================================
+// NOMBRES Y APELLIDOS
+// ==============================================
 const nombres = [
     'Ana', 'Bruno', 'Carla', 'Diego', 'Elena', 'Federico', 'Gabriela', 'Hugo', 'Isabel', 'Joaquín',
     'Laura', 'Martín', 'Natalia', 'Oscar', 'Paula', 'Ricardo', 'Sofía', 'Tomás', 'Valentina', 'Walter',
     'Camila', 'Lucas', 'Micaela', 'Nicolás', 'Rocío', 'Agustín', 'Florencia', 'Marcos', 'Julieta', 'Sebastián',
     'Lucía', 'Mateo', 'Pilar', 'Ramiro', 'Victoria', 'Emilia', 'Franco', 'Josefina', 'Lautaro', 'Malena',
-    'Renata', 'Santiago', 'Delfina', 'Benjamín', 'Martina', 'Thiago', 'Catalina', 'Juan', 'Emma', 'Pedro'
+    'Renata', 'Santiago', 'Delfina', 'Benjamín', 'Martina', 'Thiago', 'Catalina', 'Juan', 'Emma', 'Pedro',
+    'Abril', 'Santino', 'Valeria', 'Felipe', 'Mora', 'Ignacio', 'Ambar', 'Tobías', 'Dolores', 'Simón',
+    'Alma', 'Lorenzo', 'Oliva', 'Maximiliano', 'Aitana', 'Julián', 'Inés', 'Damián', 'Clara', 'Esteban',
+    'Lara', 'Cristian', 'Noelia', 'Gonzalo', 'Malvina', 'Alejandro', 'Sol', 'Marcelo', 'Ruth', 'Andrés',
+    'Aylin', 'Gael', 'Cecilia', 'Brandon', 'Dana', 'Mathías', 'Silvina', 'Brian', 'Aisha', 'Leonel',
+    'Nayla', 'Román', 'Mía', 'Emanuel', 'Violeta', 'Hans', 'Alicia', 'Klaus', 'Mirta', 'Luis',
+    'Brenda', 'César', 'Daniela', 'Enrique', 'Fátima', 'Guillermo', 'Hilda', 'Iván', 'Jacqueline', 'Kevin'
 ];
 
 const apellidos = [
-    'Gómez', 'Pérez', 'Rodríguez', 'Fernández', 'López', 'Martínez', 'Sánchez', 'Romero', 'Díaz', 'Torres'
+    'Gómez', 'Pérez', 'Rodríguez', 'Fernández', 'López', 'Martínez', 'Sánchez', 'Romero', 'Díaz', 'Torres',
+    'Morales', 'Ortiz', 'Cruz', 'Reyes', 'Gutiérrez', 'Mendoza', 'Herrera', 'Vargas', 'Medina', 'Flores',
+    'Rivera', 'Rojas', 'Muñoz', 'Álvarez', 'Castillo', 'Silva', 'García', 'Martínez', 'Núñez', 'Acosta',
+    'Paredes', 'Duarte', 'Ramos', 'Valdez', 'Luna', 'Ponce', 'Quiroga', 'Molina', 'Barrios', 'Salazar',
+    'Guerrero', 'Arias', 'Peralta', 'Giménez', 'Salas', 'Córdoba', 'Maldonado', 'Bustos', 'Domínguez', 'Correa',
+    'Navarro', 'Delgado', 'Márquez', 'Zúñiga', 'Ortega', 'Soto', 'Espinoza', 'Castro', 'Pacheco', 'Figueroa'
 ];
 
+// ==============================================
+// TÍTULOS POR CATEGORÍA
+// ==============================================
 const titulosPorCategoria = {
     bache: [
-        'Bache profundo en calle principal',
-        'Pozo peligroso cerca de la esquina',
-        'Calle deteriorada por lluvia'
+        'Bache profundo en Av. Libertador',
+        'Pozo peligroso en calle 5 de Mayo',
+        'Calle deteriorada en barrio Los Olivos',
+        'Bache en Av. Principal afecta tránsito',
+        'Hundimiento en calle San Martín',
+        'Bache sin señalización en zona escolar',
+        'Calle con múltiples baches en barrio Centro',
+        'Pozo en calle Rivadavia'
     ],
     alumbrado: [
-        'Luminaria fuera de servicio',
-        'Zona sin iluminación nocturna',
-        'Poste de luz intermitente'
+        'Luminaria fuera de servicio en calle 9 de Julio',
+        'Zona oscura en barrio La Floresta',
+        'Poste de luz intermitente en Av. Sabattini',
+        'Cuadrante completo sin luz en barrio San Juan',
+        'Farola averiada en esquina peligrosa',
+        'Alumbrado público deficiente en ruta 2',
+        'Luz de calle no funciona en barrio Jardín',
+        'Falta de luminarias en calle Sarmiento'
     ],
     basura: [
-        'Basura acumulada en la vereda',
-        'Contenedores desbordados',
-        'Residuos sin retirar'
+        'Basura acumulada en calle Córdoba',
+        'Contenedores desbordados en barrio Belgrano',
+        'Residuos sin retirar en la cuadra de Av. Perón',
+        'Punto de arrojo ilegal en calle 25 de Mayo',
+        'Acumulación de bolsas en la vía pública',
+        'Contenedor rebalsado en barrio Centro',
+        'Basural en calle San Luis',
+        'Recolección de basura irregular en zona norte'
     ],
     agua: [
-        'Pérdida de agua en la calle',
-        'Fuga constante cerca del cordón',
-        'Agua acumulada en la calzada'
+        'Pérdida de agua en calle Independencia',
+        'Fuga constante en cañería de calle Buenos Aires',
+        'Agua acumulada en calzada de Av. España',
+        'Rotura de caño en calle Chile',
+        'Filtración en la vía pública de barrio Eva Perón',
+        'Acumulación de agua estancada en calle Moreno',
+        'Brotación de agua desde el pavimento en calle Urquiza',
+        'Pérdida de agua potable en barrio San Martín'
     ],
     semaforo: [
-        'Semáforo sin funcionar',
-        'Semáforo intermitente',
-        'Cruce peligroso por falla semafórica'
+        'Semáforo sin funcionar en Av. Libertador y San Martín',
+        'Semáforo intermitente en calle 9 de Julio',
+        'Cruce peligroso en Av. Sabattini y Rivadavia',
+        'Semáforo dañado en Av. Perón',
+        'Luz roja intermitente en calle Córdoba',
+        'Semáforo en modo amarillo todo el día en Av. España',
+        'Cruce con visibilidad reducida en calle San Juan',
+        'Semáforo peatonal no funciona en barrio Centro'
     ],
     inseguridad: [
-        'Zona insegura por falta de luz',
-        'Movimiento sospechoso recurrente',
-        'Sector con baja visibilidad'
+        'Zona insegura en barrio La Floresta',
+        'Actividad sospechosa en calle 5 de Mayo',
+        'Sector con alta incidencia delictiva en barrio San Juan',
+        'Calle poco transitada insegura en zona sur',
+        'Robos constantes en Av. Libertador',
+        'Necesidad de más patrullaje en barrio Los Olivos',
+        'Vivienda abandonada en calle Moreno',
+        'Venta de drogas en la esquina de Av. Sabattini'
     ],
     vereda: [
-        'Vereda rota con riesgo de caída',
-        'Baldosas levantadas',
-        'Obstrucción peatonal'
+        'Vereda rota en calle San Martín',
+        'Baldosas levantadas en Av. Principal',
+        'Obstrucción peatonal en calle Córdoba',
+        'Vereda con desniveles en barrio Centro',
+        'Piso irregular en calle 25 de Mayo',
+        'Baldosas sueltas en zona comercial',
+        'Vereda hundida en calle Chile',
+        'Mala condición de vereda en barrio Jardín'
     ],
     ruido: [
-        'Ruidos molestos durante la noche',
-        'Música alta recurrente',
-        'Molestias sonoras en zona residencial'
+        'Ruidos molestos en barrio Centro',
+        'Música alta en calle Rivadavia',
+        'Molestias sonoras en zona residencial',
+        'Fiesta constante en barrio Los Olivos',
+        'Ruido de obra en calle Urquiza',
+        'Alarma de vehículo en Av. Perón',
+        'Calle con contaminación sonora en zona norte',
+        'Eventos sin permiso en barrio San Juan'
     ],
     animal_suelto: [
-        'Animal suelto en la vía pública',
-        'Perro suelto cerca de escuela',
-        'Caballo suelto en avenida'
+        'Perro suelto en Av. Libertador',
+        'Caballo suelto en ruta 2',
+        'Animales abandonados en barrio La Floresta',
+        'Potro suelto en calle 9 de Julio',
+        'Jauría de perros en barrio Belgrano',
+        'Animal doméstico sin dueño en calle San Martín',
+        'Vaca suelta en zona periurbana'
     ],
     microbasural: [
-        'Microbasural en terreno baldío',
-        'Acumulación de residuos clandestinos',
-        'Basural informal en crecimiento'
+        'Microbasural en terreno baldío de calle Moreno',
+        'Acumulación de residuos en barrio San Juan',
+        'Basural informal en Av. Sabattini',
+        'Punto de arrojo ilegal en calle Córdoba',
+        'Escombros en la vía pública de barrio Eva Perón',
+        'Foco de basura en calle Chile',
+        'Tiradero a cielo abierto en zona sur',
+        'Acopio de materiales en calle Urquiza'
     ]
 };
 
+// ==============================================
+// FUNCIONES UTILITARIAS
+// ==============================================
 function randomItem(array) {
     return array[Math.floor(Math.random() * array.length)];
 }
 
-function randomCoordinate(base, delta = 0.015) {
+function randomWeighted(weightedArray) {
+    const total = weightedArray.reduce((sum, item) => sum + item.peso, 0);
+    let random = Math.random() * total;
+    for (const item of weightedArray) {
+        random -= item.peso;
+        if (random <= 0) return item;
+    }
+    return weightedArray[weightedArray.length - 1];
+}
+
+function randomDate(start, end) {
+    const diff = end.getTime() - start.getTime();
+    return new Date(start.getTime() + Math.random() * diff);
+}
+
+function randomCoordinate(base, delta = 0.025) {
     return Number((base + (Math.random() - 0.5) * delta).toFixed(6));
 }
 
-function buildReporteTexto(categoria, cliente) {
-    const titulo = randomItem(titulosPorCategoria[categoria]);
-
-    return {
-        titulo,
-        columna_unica: `${titulo}. Reporte generado en ${cliente.localidad}. Se solicita revisión del área correspondiente.`,
-        observaciones: `Incidente demo asociado a ${cliente.nombre}. Priorizar según impacto, ubicación y recurrencia.`
-    };
+function buildTitulo(categoria) {
+    const titulos = titulosPorCategoria[categoria] || titulosPorCategoria.bache;
+    return randomItem(titulos);
 }
 
+// ==============================================
+// GENERAR USUARIOS ADMINISTRATIVOS (solo Villa María)
+// ==============================================
+function generarUsuariosAdministrativos(clientes) {
+    const usuarios = [];
+    
+    // Superadmin
+    usuarios.push({
+        clerkUserId: 'demo_superadmin_urbanflow',
+        email: 'superadmin@urbanflow.demo',
+        nombre: 'Super',
+        apellido: 'Usuario',
+        rol: 'superadmin',
+        ciudad: 'Villa María',
+        localidad: 'Villa María',
+        provincia: 'Córdoba',
+        pais: 'Argentina',
+        esDemo: true
+    });
+
+    // Solo para Villa María
+    const cliente = clientes[0];
+    usuarios.push({
+        clerkUserId: 'demo_admin_villamaria',
+        email: 'admin.villamaria@urbanflow.demo',
+        nombre: 'Admin',
+        apellido: 'VillaMaría',
+        rol: 'admin',
+        clienteId: cliente._id,
+        clienteNombre: cliente.nombre,
+        ciudad: cliente.localidad,
+        localidad: cliente.localidad,
+        provincia: cliente.provincia,
+        pais: cliente.pais,
+        esDemo: true
+    });
+
+    usuarios.push({
+        clerkUserId: 'demo_operador_villamaria',
+        email: 'operador.villamaria@urbanflow.demo',
+        nombre: 'Operador',
+        apellido: 'VillaMaría',
+        rol: 'operador',
+        clienteId: cliente._id,
+        clienteNombre: cliente.nombre,
+        ciudad: cliente.localidad,
+        localidad: cliente.localidad,
+        provincia: cliente.provincia,
+        pais: cliente.pais,
+        esDemo: true
+    });
+
+    usuarios.push({
+        clerkUserId: 'demo_moderador_villamaria',
+        email: 'moderador.villamaria@urbanflow.demo',
+        nombre: 'Moderador',
+        apellido: 'VillaMaría',
+        rol: 'moderador',
+        clienteId: cliente._id,
+        clienteNombre: cliente.nombre,
+        ciudad: cliente.localidad,
+        localidad: cliente.localidad,
+        provincia: cliente.provincia,
+        pais: cliente.pais,
+        esDemo: true
+    });
+
+    return usuarios;
+}
+
+// ==============================================
+// GENERAR CIUDADANOS (solo Villa María)
+// ==============================================
+function generarCiudadanos(cantidad, clientes) {
+    const usuarios = [];
+    const cliente = clientes[0];
+
+    for (let i = 0; i < cantidad; i++) {
+        const nombre = nombres[i % nombres.length];
+        const apellido = randomItem(apellidos);
+        const edad = 18 + Math.floor(Math.random() * 60);
+
+        usuarios.push({
+            clerkUserId: `demo_ciudadano_${i + 1}`,
+            email: `ciudadano${i + 1}@urbanflow.demo`,
+            nombre,
+            apellido,
+            edad,
+            telefono: `+5493534${String(100000 + i).padStart(6, '0')}`,
+            direccion: `Calle ${i + 1}, Villa María`,
+            ciudad: cliente.localidad,
+            localidad: cliente.localidad,
+            provincia: cliente.provincia,
+            pais: cliente.pais,
+            rol: 'ciudadano',
+            clienteId: cliente._id,
+            clienteNombre: cliente.nombre,
+            esDemo: true
+        });
+    }
+
+    return usuarios;
+}
+
+// ==============================================
+// GENERAR REPORTES (solo Villa María)
+// ==============================================
+function generarReportes(cantidad, clientes, ciudadanos) {
+    const reportes = [];
+    const cliente = clientes[0];
+    
+    for (let i = 0; i < cantidad; i++) {
+        const ciudadano = ciudadanos[i % ciudadanos.length];
+        const categoriaObj = randomWeighted(categoriasPonderadas);
+        const categoria = categoriaObj.categoria;
+        const estadoObj = randomWeighted(estadosDistribucion);
+        const estado = estadoObj.estado;
+        const prioridad = randomItem(prioridades);
+        const titulo = buildTitulo(categoria);
+        
+        const ahora = new Date();
+        const hace6Meses = new Date(ahora);
+        hace6Meses.setMonth(hace6Meses.getMonth() - 6);
+        const fechaCreacion = randomDate(hace6Meses, ahora);
+
+        // Ubicaciones aleatorias alrededor de Villa María
+        const lat = randomCoordinate(-32.4075, 0.03);
+        const lng = randomCoordinate(-63.2402, 0.03);
+
+        reportes.push({
+            usuarioId: ciudadano.clerkUserId,
+            usuarioEmail: ciudadano.email,
+            clienteId: cliente._id,
+            clienteNombre: cliente.nombre,
+            titulo: titulo,
+            columna_unica: `${titulo} - Villa María`,
+            direccion: `Ubicación ${i + 1}, Villa María`,
+            latitud: lat,
+            longitud: lng,
+            localidad: cliente.localidad,
+            provincia: cliente.provincia,
+            pais: cliente.pais,
+            observaciones: `Reportado por ${ciudadano.nombre} ${ciudadano.apellido}. Prioridad: ${prioridad}.`,
+            categoria_asignada_por_ia: categoria,
+            ia_procesado: true,
+            prioridad: prioridad,
+            etiquetas: [categoria, 'villa_maria', prioridad, estado],
+            ai_summary: `${titulo} en Villa María. Prioridad: ${prioridad}. Estado: ${estado}.`,
+            ai_priority_score: prioridad === 'critica' ? 90 + Math.random() * 10 : 
+                               prioridad === 'alta' ? 70 + Math.random() * 20 : 
+                               prioridad === 'media' ? 40 + Math.random() * 30 : 
+                               10 + Math.random() * 30,
+            estado: estado,
+            fecha_hora: fechaCreacion,
+            esDemo: true
+        });
+    }
+
+    return reportes;
+}
+
+// ==============================================
+// FUNCIÓN PRINCIPAL
+// ==============================================
 async function seedDemo() {
     try {
-        console.log('Conectando a MongoDB...');
+        console.log('🚀 Conectando a MongoDB...');
         await mongoose.connect(MONGODB_URI);
-        console.log('Conectado a MongoDB');
+        console.log('✅ Conectado a MongoDB\n');
 
-        console.log('Limpiando datos demo anteriores...');
+        console.log('🗑️  Limpiando datos demo anteriores...');
         await Reporte.deleteMany({ esDemo: true });
         await User.deleteMany({ esDemo: true });
         await Cliente.deleteMany({ esDemo: true });
+        console.log('✅ Datos limpios\n');
 
-        console.log('Creando clientes demo...');
+        // 1. CLIENTE (solo Villa María)
+        console.log('📋 Creando cliente: Municipalidad de Villa María...');
         const clientes = await Cliente.insertMany(
-            clientesBase.map((cliente) => ({
-                ...cliente,
-                esDemo: true
-            }))
+            clientesBase.map(c => ({ ...c, esDemo: true }))
         );
+        console.log(`✅ Cliente creado: ${clientes[0].nombre}\n`);
 
-        console.log('Creando usuarios demo...');
+        // 2. USUARIOS ADMINISTRATIVOS
+        console.log('👤 Creando usuarios administrativos...');
+        const admins = generarUsuariosAdministrativos(clientes);
+        let adminCount = 0;
+        for (const admin of admins) {
+            await User.findOneAndUpdate(
+                { clerkUserId: admin.clerkUserId },
+                { $set: admin },
+                { upsert: true }
+            );
+            adminCount++;
+        }
+        console.log(`✅ ${adminCount} usuarios administrativos creados\n`);
 
-        const usuarios = [];
+        // 3. CIUDADANOS
+        console.log(`👤 Creando ${CONFIG.TOTAL_CIUDADANOS} ciudadanos de Villa María...`);
+        const ciudadanosData = generarCiudadanos(CONFIG.TOTAL_CIUDADANOS, clientes);
+        let ciudadanoCount = 0;
+        for (const ciudadano of ciudadanosData) {
+            await User.findOneAndUpdate(
+                { clerkUserId: ciudadano.clerkUserId },
+                { $set: ciudadano },
+                { upsert: true }
+            );
+            ciudadanoCount++;
+            if (ciudadanoCount % 100 === 0) {
+                console.log(`   Progreso: ${ciudadanoCount}/${CONFIG.TOTAL_CIUDADANOS} ciudadanos`);
+            }
+        }
+        console.log(`✅ ${ciudadanoCount} ciudadanos creados\n`);
 
-        usuarios.push({
-            clerkUserId: 'demo_superadmin_urbanflow',
-            email: 'superadmin@urbanflow.demo',
-            nombre: 'Super',
-            apellido: 'Usuario',
-            rol: 'superadmin',
-            ciudad: 'Villa María',
-            localidad: 'Villa María',
-            provincia: 'Córdoba',
-            pais: 'Argentina',
-            esDemo: true
+        // Obtener ciudadanos para reportes
+        const ciudadanos = await User.find({ rol: 'ciudadano', esDemo: true });
+
+        // 4. REPORTES
+        console.log(`📝 Creando ${CONFIG.TOTAL_REPORTES} reportes para Villa María...`);
+        const reportesData = generarReportes(CONFIG.TOTAL_REPORTES, clientes, ciudadanos);
+        
+        const BATCH_SIZE = 100;
+        let insertados = 0;
+        for (let i = 0; i < reportesData.length; i += BATCH_SIZE) {
+            const batch = reportesData.slice(i, i + BATCH_SIZE);
+            await Reporte.insertMany(batch);
+            insertados += batch.length;
+            console.log(`   Progreso: ${insertados}/${CONFIG.TOTAL_REPORTES} reportes`);
+        }
+        console.log(`✅ ${reportesData.length} reportes creados\n`);
+
+        // 5. ESTADÍSTICAS
+        const totalUsers = await User.countDocuments({ esDemo: true });
+        const totalReportes = await Reporte.countDocuments({ esDemo: true });
+        
+        console.log('📊 ESTADÍSTICAS FINALES - VILLA MARÍA:');
+        console.log('─────────────────────────────────────────');
+        console.log(`🏢 Cliente: ${clientes[0].nombre}`);
+        console.log(`👤 Usuarios totales: ${totalUsers}`);
+        console.log(`   ├─ Administrativos: ${adminCount}`);
+        console.log(`   └─ Ciudadanos: ${ciudadanoCount}`);
+        console.log(`📋 Reportes: ${totalReportes}`);
+        
+        const statsCategoria = await Reporte.aggregate([
+            { $match: { esDemo: true } },
+            { $group: { _id: '$categoria_asignada_por_ia', count: { $sum: 1 } } },
+            { $sort: { count: -1 } }
+        ]);
+        
+        console.log('\n📂 Distribución por categoría:');
+        statsCategoria.forEach(s => {
+            console.log(`   ${s._id}: ${s.count} (${(s.count/totalReportes*100).toFixed(1)}%)`);
         });
 
-        clientes.forEach((cliente, index) => {
-            usuarios.push({
-                clerkUserId: `demo_admin_cliente_${index + 1}`,
-                email: `admin${index + 1}@urbanflow.demo`,
-                nombre: 'Admin',
-                apellido: cliente.localidad.replace(/\s/g, ''),
-                rol: 'admin',
-                clienteId: cliente._id,
-                clienteNombre: cliente.nombre,
-                ciudad: cliente.localidad,
-                localidad: cliente.localidad,
-                provincia: cliente.provincia,
-                pais: cliente.pais,
-                esDemo: true
-            });
-
-            usuarios.push({
-                clerkUserId: `demo_operador_cliente_${index + 1}`,
-                email: `operador${index + 1}@urbanflow.demo`,
-                nombre: 'Operador',
-                apellido: cliente.localidad.replace(/\s/g, ''),
-                rol: 'operador',
-                clienteId: cliente._id,
-                clienteNombre: cliente.nombre,
-                ciudad: cliente.localidad,
-                localidad: cliente.localidad,
-                provincia: cliente.provincia,
-                pais: cliente.pais,
-                esDemo: true
-            });
-
-            usuarios.push({
-                clerkUserId: `demo_moderador_cliente_${index + 1}`,
-                email: `moderador${index + 1}@urbanflow.demo`,
-                nombre: 'Moderador',
-                apellido: cliente.localidad.replace(/\s/g, ''),
-                rol: 'moderador',
-                clienteId: cliente._id,
-                clienteNombre: cliente.nombre,
-                ciudad: cliente.localidad,
-                localidad: cliente.localidad,
-                provincia: cliente.provincia,
-                pais: cliente.pais,
-                esDemo: true
-            });
+        const statsEstado = await Reporte.aggregate([
+            { $match: { esDemo: true } },
+            { $group: { _id: '$estado', count: { $sum: 1 } } },
+            { $sort: { count: -1 } }
+        ]);
+        
+        console.log('\n📊 Distribución por estado:');
+        statsEstado.forEach(s => {
+            console.log(`   ${s._id}: ${s.count} (${(s.count/totalReportes*100).toFixed(1)}%)`);
         });
 
-        for (let i = 0; i < 50; i++) {
-            const cliente = clientes[i % clientes.length];
-            const nombre = nombres[i];
-            const apellido = randomItem(apellidos);
-
-            usuarios.push({
-                clerkUserId: `demo_ciudadano_${i + 1}`,
-                email: `ciudadano${i + 1}@urbanflow.demo`,
-                nombre,
-                apellido,
-                edad: 18 + Math.floor(Math.random() * 55),
-                telefono: `+5493534${String(100000 + i).padStart(6, '0')}`,
-                direccion: `Domicilio demo ${i + 1}, ${cliente.localidad}`,
-                ciudad: cliente.localidad,
-                localidad: cliente.localidad,
-                provincia: cliente.provincia,
-                pais: cliente.pais,
-                rol: 'ciudadano',
-                clienteId: cliente._id,
-                clienteNombre: cliente.nombre,
-                esDemo: true
-            });
-        }
-
-        const usuariosCreados = await User.insertMany(usuarios);
-        const ciudadanos = usuariosCreados.filter((u) => u.rol === 'ciudadano');
-
-        console.log('Creando 100 incidentes demo...');
-
-        const reportes = [];
-
-        for (let i = 0; i < 100; i++) {
-            const cliente = clientes[i % clientes.length];
-            const ciudadano = ciudadanos[i % ciudadanos.length];
-            const categoria = randomItem(categorias);
-            const prioridad = randomItem(prioridades);
-            const estado = randomItem(estados);
-            const texto = buildReporteTexto(categoria, cliente);
-
-            reportes.push({
-                usuarioId: ciudadano.clerkUserId,
-                usuarioEmail: ciudadano.email,
-                clienteId: cliente._id,
-                clienteNombre: cliente.nombre,
-
-                titulo: texto.titulo,
-                columna_unica: texto.columna_unica,
-
-                direccion: `Ubicación demo ${i + 1}, ${cliente.localidad}, ${cliente.provincia}`,
-                latitud: randomCoordinate(cliente.latitud),
-                longitud: randomCoordinate(cliente.longitud),
-                localidad: cliente.localidad,
-                provincia: cliente.provincia,
-                pais: cliente.pais,
-
-                observaciones: texto.observaciones,
-
-                categoria_asignada_por_ia: categoria,
-                ia_procesado: true,
-                prioridad,
-                etiquetas: [categoria, cliente.localidad.toLowerCase().replace(/\s/g, '-'), prioridad],
-
-                ai_summary: `${texto.titulo} en ${cliente.localidad}. Prioridad sugerida: ${prioridad}.`,
-                ai_priority_score: prioridad === 'critica' ? 95 : prioridad === 'alta' ? 78 : prioridad === 'media' ? 55 : 30,
-
-                estado,
-                fecha_hora: new Date(Date.now() - Math.floor(Math.random() * 1000 * 60 * 60 * 24 * 30)),
-                esDemo: true
-            });
-        }
-
-        await Reporte.insertMany(reportes);
-
-        console.log('');
-        console.log('Seed demo finalizado correctamente');
-        console.log('Clientes creados:', clientes.length);
-        console.log('Usuarios creados:', usuariosCreados.length);
-        console.log('Ciudadanos creados:', ciudadanos.length);
-        console.log('Incidentes creados:', reportes.length);
-        console.log('');
+        console.log('\n✅ SEED DEMO FINALIZADO CORRECTAMENTE');
+        console.log('📌 TODOS LOS DATOS SON PARA VILLA MARÍA');
+        console.log('─────────────────────────────────────────\n');
 
         await mongoose.disconnect();
         process.exit(0);
     } catch (error) {
-        console.error('Error ejecutando seed demo:', error);
+        console.error('❌ Error ejecutando seed demo:', error);
         await mongoose.disconnect();
         process.exit(1);
     }
