@@ -16,12 +16,93 @@ if (!MONGODB_URI) {
 // CONFIGURACIÓN - SOLO VILLA MARÍA
 // ==============================================
 const CONFIG = {
-    TOTAL_REPORTES: 1000,        // 1000 reportes para Villa María
-    TOTAL_CIUDADANOS: 700,       // 700 ciudadanos de Villa María
+    TOTAL_REPORTES: 1000,
+    TOTAL_CIUDADANOS: 700,
 };
 
 // ==============================================
-// SOLO EL CLIENTE DE VILLA MARÍA
+// CALLES REALES DE VILLA MARÍA (con numeración realista)
+// ==============================================
+const callesVillaMaria = [
+    // Avenidas principales (números más grandes)
+    { nombre: 'Av. Libertador', min: 100, max: 2500 },
+    { nombre: 'Av. Sabattini', min: 100, max: 2000 },
+    { nombre: 'Av. Perón', min: 100, max: 1800 },
+    { nombre: 'Av. España', min: 100, max: 1500 },
+    { nombre: 'Av. Principal', min: 100, max: 2200 },
+    
+    // Calles céntricas (números medios)
+    { nombre: 'Calle San Martín', min: 1, max: 1200 },
+    { nombre: 'Calle 9 de Julio', min: 1, max: 1000 },
+    { nombre: 'Calle 25 de Mayo', min: 1, max: 900 },
+    { nombre: 'Calle Rivadavia', min: 1, max: 1100 },
+    { nombre: 'Calle Córdoba', min: 1, max: 800 },
+    { nombre: 'Calle Buenos Aires', min: 1, max: 700 },
+    { nombre: 'Calle Chile', min: 1, max: 600 },
+    { nombre: 'Calle Urquiza', min: 1, max: 500 },
+    { nombre: 'Calle Moreno', min: 1, max: 400 },
+    { nombre: 'Calle Sarmiento', min: 1, max: 900 },
+    { nombre: 'Calle Independencia', min: 1, max: 800 },
+    { nombre: 'Calle San Juan', min: 1, max: 700 },
+    { nombre: 'Calle San Luis', min: 1, max: 600 },
+    { nombre: 'Calle Santa Fe', min: 1, max: 500 },
+    { nombre: 'Calle Entre Ríos', min: 1, max: 400 },
+    { nombre: 'Calle Corrientes', min: 1, max: 300 },
+    { nombre: 'Calle Mendoza', min: 1, max: 400 },
+    { nombre: 'Calle Salta', min: 1, max: 300 },
+    { nombre: 'Calle Jujuy', min: 1, max: 300 },
+    { nombre: 'Calle Tucumán', min: 1, max: 200 },
+    { nombre: 'Calle Catamarca', min: 1, max: 200 },
+    { nombre: 'Calle La Rioja', min: 1, max: 200 },
+    
+    // Calles más cortas (números bajos)
+    { nombre: 'Calle Pueyrredón', min: 1, max: 300 },
+    { nombre: 'Calle Belgrano', min: 1, max: 500 },
+    { nombre: 'Calle Mitre', min: 1, max: 400 },
+    { nombre: 'Calle Alberdi', min: 1, max: 350 },
+    { nombre: 'Calle Maipú', min: 1, max: 300 },
+    { nombre: 'Calle Lavalle', min: 1, max: 250 },
+    { nombre: 'Calle Alvear', min: 1, max: 200 },
+    { nombre: 'Calle Dorrego', min: 1, max: 200 },
+    { nombre: 'Calle French', min: 1, max: 150 },
+    { nombre: 'Calle Arenales', min: 1, max: 150 },
+    { nombre: 'Calle Viamonte', min: 1, max: 150 },
+    { nombre: 'Calle Junín', min: 1, max: 150 },
+    
+    // Bulevares y avenidas secundarias
+    { nombre: 'Bv. San Martín', min: 100, max: 1500 },
+    { nombre: 'Bv. Sarmiento', min: 100, max: 1200 },
+    { nombre: 'Bv. España', min: 100, max: 1000 },
+    { nombre: 'Bv. Illia', min: 100, max: 800 },
+    { nombre: 'Ruta Nacional 9', min: 1, max: 500 }
+];
+
+// ==============================================
+// REFERENCIAS DE ZONAS/SECTORES (para contexto)
+// ==============================================
+const zonasVillaMaria = [
+    'Centro',
+    'Barrio Los Olivos',
+    'Barrio San Juan',
+    'Barrio La Floresta',
+    'Barrio Belgrano',
+    'Barrio Eva Perón',
+    'Barrio San Martín',
+    'Barrio Jardín',
+    'Barrio Industrial',
+    'Barrio Municipal',
+    'Barrio Ameghino',
+    'Barrio El Ceibo',
+    'Barrio La Cañada',
+    'Barrio Los Alamos',
+    'Barrio San José',
+    'Barrio La Lomita',
+    'Barrio Parque Norte',
+    'Barrio Parque Sur'
+];
+
+// ==============================================
+// CLIENTE
 // ==============================================
 const clientesBase = [
     {
@@ -96,43 +177,43 @@ const apellidos = [
 const titulosPorCategoria = {
     bache: [
         'Bache profundo en Av. Libertador',
-        'Pozo peligroso en calle 5 de Mayo',
-        'Calle deteriorada en barrio Los Olivos',
+        'Pozo peligroso en calle 25 de Mayo',
+        'Calle deteriorada en el centro',
         'Bache en Av. Principal afecta tránsito',
         'Hundimiento en calle San Martín',
         'Bache sin señalización en zona escolar',
-        'Calle con múltiples baches en barrio Centro',
+        'Calle con múltiples baches en el barrio',
         'Pozo en calle Rivadavia'
     ],
     alumbrado: [
         'Luminaria fuera de servicio en calle 9 de Julio',
-        'Zona oscura en barrio La Floresta',
+        'Zona oscura en Barrio Los Olivos',
         'Poste de luz intermitente en Av. Sabattini',
-        'Cuadrante completo sin luz en barrio San Juan',
+        'Cuadrante completo sin luz en Barrio San Juan',
         'Farola averiada en esquina peligrosa',
-        'Alumbrado público deficiente en ruta 2',
-        'Luz de calle no funciona en barrio Jardín',
+        'Alumbrado público deficiente en zona industrial',
+        'Luz de calle no funciona en el barrio',
         'Falta de luminarias en calle Sarmiento'
     ],
     basura: [
         'Basura acumulada en calle Córdoba',
-        'Contenedores desbordados en barrio Belgrano',
-        'Residuos sin retirar en la cuadra de Av. Perón',
+        'Contenedores desbordados en Barrio Belgrano',
+        'Residuos sin retirar en Av. Perón',
         'Punto de arrojo ilegal en calle 25 de Mayo',
         'Acumulación de bolsas en la vía pública',
-        'Contenedor rebalsado en barrio Centro',
+        'Contenedor rebalsado en el centro',
         'Basural en calle San Luis',
-        'Recolección de basura irregular en zona norte'
+        'Recolección de basura irregular en el barrio'
     ],
     agua: [
         'Pérdida de agua en calle Independencia',
         'Fuga constante en cañería de calle Buenos Aires',
         'Agua acumulada en calzada de Av. España',
         'Rotura de caño en calle Chile',
-        'Filtración en la vía pública de barrio Eva Perón',
+        'Filtración en la vía pública del barrio',
         'Acumulación de agua estancada en calle Moreno',
         'Brotación de agua desde el pavimento en calle Urquiza',
-        'Pérdida de agua potable en barrio San Martín'
+        'Pérdida de agua potable en el barrio'
     ],
     semaforo: [
         'Semáforo sin funcionar en Av. Libertador y San Martín',
@@ -142,53 +223,53 @@ const titulosPorCategoria = {
         'Luz roja intermitente en calle Córdoba',
         'Semáforo en modo amarillo todo el día en Av. España',
         'Cruce con visibilidad reducida en calle San Juan',
-        'Semáforo peatonal no funciona en barrio Centro'
+        'Semáforo peatonal no funciona en el centro'
     ],
     inseguridad: [
-        'Zona insegura en barrio La Floresta',
-        'Actividad sospechosa en calle 5 de Mayo',
-        'Sector con alta incidencia delictiva en barrio San Juan',
+        'Zona insegura en Barrio La Floresta',
+        'Actividad sospechosa en calle 25 de Mayo',
+        'Sector con alta incidencia delictiva en el barrio',
         'Calle poco transitada insegura en zona sur',
         'Robos constantes en Av. Libertador',
-        'Necesidad de más patrullaje en barrio Los Olivos',
+        'Necesidad de más patrullaje en el barrio',
         'Vivienda abandonada en calle Moreno',
-        'Venta de drogas en la esquina de Av. Sabattini'
+        'Venta de drogas en Av. Sabattini'
     ],
     vereda: [
         'Vereda rota en calle San Martín',
         'Baldosas levantadas en Av. Principal',
         'Obstrucción peatonal en calle Córdoba',
-        'Vereda con desniveles en barrio Centro',
+        'Vereda con desniveles en el centro',
         'Piso irregular en calle 25 de Mayo',
         'Baldosas sueltas en zona comercial',
         'Vereda hundida en calle Chile',
-        'Mala condición de vereda en barrio Jardín'
+        'Mala condición de vereda en el barrio'
     ],
     ruido: [
-        'Ruidos molestos en barrio Centro',
+        'Ruidos molestos en el centro',
         'Música alta en calle Rivadavia',
         'Molestias sonoras en zona residencial',
-        'Fiesta constante en barrio Los Olivos',
+        'Fiesta constante en el barrio',
         'Ruido de obra en calle Urquiza',
         'Alarma de vehículo en Av. Perón',
-        'Calle con contaminación sonora en zona norte',
-        'Eventos sin permiso en barrio San Juan'
+        'Calle con contaminación sonora en zona este',
+        'Eventos sin permiso en el barrio'
     ],
     animal_suelto: [
         'Perro suelto en Av. Libertador',
-        'Caballo suelto en ruta 2',
-        'Animales abandonados en barrio La Floresta',
+        'Caballo suelto en ruta 9',
+        'Animales abandonados en el barrio',
         'Potro suelto en calle 9 de Julio',
-        'Jauría de perros en barrio Belgrano',
+        'Jauría de perros en el barrio',
         'Animal doméstico sin dueño en calle San Martín',
         'Vaca suelta en zona periurbana'
     ],
     microbasural: [
         'Microbasural en terreno baldío de calle Moreno',
-        'Acumulación de residuos en barrio San Juan',
+        'Acumulación de residuos en el barrio',
         'Basural informal en Av. Sabattini',
         'Punto de arrojo ilegal en calle Córdoba',
-        'Escombros en la vía pública de barrio Eva Perón',
+        'Escombros en la vía pública del barrio',
         'Foco de basura en calle Chile',
         'Tiradero a cielo abierto en zona sur',
         'Acopio de materiales en calle Urquiza'
@@ -227,12 +308,40 @@ function buildTitulo(categoria) {
 }
 
 // ==============================================
-// GENERAR USUARIOS ADMINISTRATIVOS (solo Villa María)
+// FUNCIÓN PARA GENERAR DIRECCIÓN REALISTA
+// ==============================================
+function generarDireccionReal() {
+    // Seleccionar una calle aleatoria
+    const calleObj = randomItem(callesVillaMaria);
+    const nombreCalle = calleObj.nombre;
+    
+    // Generar número dentro del rango realista de esa calle
+    const numero = Math.floor(Math.random() * (calleObj.max - calleObj.min + 1)) + calleObj.min;
+    
+    // A veces incluir "s/n" (sin número) para lugares específicos
+    const usarSinNumero = Math.random() < 0.05; // 5% de probabilidad
+    
+    // Seleccionar zona/barrio
+    const zona = randomItem(zonasVillaMaria);
+    
+    // Construir dirección
+    let direccion;
+    if (usarSinNumero) {
+        direccion = `${nombreCalle} s/n, ${zona}, Villa María`;
+    } else {
+        direccion = `${nombreCalle} ${numero}, ${zona}, Villa María`;
+    }
+    
+    return direccion;
+}
+
+// ==============================================
+// GENERAR USUARIOS ADMINISTRATIVOS
 // ==============================================
 function generarUsuariosAdministrativos(clientes) {
     const usuarios = [];
+    const cliente = clientes[0];
     
-    // Superadmin
     usuarios.push({
         clerkUserId: 'demo_superadmin_urbanflow',
         email: 'superadmin@urbanflow.demo',
@@ -246,8 +355,6 @@ function generarUsuariosAdministrativos(clientes) {
         esDemo: true
     });
 
-    // Solo para Villa María
-    const cliente = clientes[0];
     usuarios.push({
         clerkUserId: 'demo_admin_villamaria',
         email: 'admin.villamaria@urbanflow.demo',
@@ -297,7 +404,7 @@ function generarUsuariosAdministrativos(clientes) {
 }
 
 // ==============================================
-// GENERAR CIUDADANOS (solo Villa María)
+// GENERAR CIUDADANOS CON DIRECCIONES REALES
 // ==============================================
 function generarCiudadanos(cantidad, clientes) {
     const usuarios = [];
@@ -307,6 +414,7 @@ function generarCiudadanos(cantidad, clientes) {
         const nombre = nombres[i % nombres.length];
         const apellido = randomItem(apellidos);
         const edad = 18 + Math.floor(Math.random() * 60);
+        const direccionReal = generarDireccionReal();
 
         usuarios.push({
             clerkUserId: `demo_ciudadano_${i + 1}`,
@@ -315,7 +423,7 @@ function generarCiudadanos(cantidad, clientes) {
             apellido,
             edad,
             telefono: `+5493534${String(100000 + i).padStart(6, '0')}`,
-            direccion: `Calle ${i + 1}, Villa María`,
+            direccion: direccionReal,
             ciudad: cliente.localidad,
             localidad: cliente.localidad,
             provincia: cliente.provincia,
@@ -331,7 +439,7 @@ function generarCiudadanos(cantidad, clientes) {
 }
 
 // ==============================================
-// GENERAR REPORTES (solo Villa María)
+// GENERAR REPORTES CON DIRECCIONES REALES
 // ==============================================
 function generarReportes(cantidad, clientes, ciudadanos) {
     const reportes = [];
@@ -345,13 +453,13 @@ function generarReportes(cantidad, clientes, ciudadanos) {
         const estado = estadoObj.estado;
         const prioridad = randomItem(prioridades);
         const titulo = buildTitulo(categoria);
+        const direccionReal = generarDireccionReal();
         
         const ahora = new Date();
         const hace6Meses = new Date(ahora);
         hace6Meses.setMonth(hace6Meses.getMonth() - 6);
         const fechaCreacion = randomDate(hace6Meses, ahora);
 
-        // Ubicaciones aleatorias alrededor de Villa María
         const lat = randomCoordinate(-32.4075, 0.03);
         const lng = randomCoordinate(-63.2402, 0.03);
 
@@ -361,14 +469,14 @@ function generarReportes(cantidad, clientes, ciudadanos) {
             clienteId: cliente._id,
             clienteNombre: cliente.nombre,
             titulo: titulo,
-            columna_unica: `${titulo} - Villa María`,
-            direccion: `Ubicación ${i + 1}, Villa María`,
+            columna_unica: `${titulo} - ${direccionReal}`,
+            direccion: direccionReal,
             latitud: lat,
             longitud: lng,
             localidad: cliente.localidad,
             provincia: cliente.provincia,
             pais: cliente.pais,
-            observaciones: `Reportado por ${ciudadano.nombre} ${ciudadano.apellido}. Prioridad: ${prioridad}.`,
+            observaciones: `Reportado por ${ciudadano.nombre} ${ciudadano.apellido} desde ${direccionReal}. Prioridad: ${prioridad}.`,
             categoria_asignada_por_ia: categoria,
             ia_procesado: true,
             prioridad: prioridad,
@@ -402,14 +510,12 @@ async function seedDemo() {
         await Cliente.deleteMany({ esDemo: true });
         console.log('✅ Datos limpios\n');
 
-        // 1. CLIENTE (solo Villa María)
         console.log('📋 Creando cliente: Municipalidad de Villa María...');
         const clientes = await Cliente.insertMany(
             clientesBase.map(c => ({ ...c, esDemo: true }))
         );
         console.log(`✅ Cliente creado: ${clientes[0].nombre}\n`);
 
-        // 2. USUARIOS ADMINISTRATIVOS
         console.log('👤 Creando usuarios administrativos...');
         const admins = generarUsuariosAdministrativos(clientes);
         let adminCount = 0;
@@ -423,7 +529,6 @@ async function seedDemo() {
         }
         console.log(`✅ ${adminCount} usuarios administrativos creados\n`);
 
-        // 3. CIUDADANOS
         console.log(`👤 Creando ${CONFIG.TOTAL_CIUDADANOS} ciudadanos de Villa María...`);
         const ciudadanosData = generarCiudadanos(CONFIG.TOTAL_CIUDADANOS, clientes);
         let ciudadanoCount = 0;
@@ -440,10 +545,8 @@ async function seedDemo() {
         }
         console.log(`✅ ${ciudadanoCount} ciudadanos creados\n`);
 
-        // Obtener ciudadanos para reportes
         const ciudadanos = await User.find({ rol: 'ciudadano', esDemo: true });
 
-        // 4. REPORTES
         console.log(`📝 Creando ${CONFIG.TOTAL_REPORTES} reportes para Villa María...`);
         const reportesData = generarReportes(CONFIG.TOTAL_REPORTES, clientes, ciudadanos);
         
@@ -457,7 +560,6 @@ async function seedDemo() {
         }
         console.log(`✅ ${reportesData.length} reportes creados\n`);
 
-        // 5. ESTADÍSTICAS
         const totalUsers = await User.countDocuments({ esDemo: true });
         const totalReportes = await Reporte.countDocuments({ esDemo: true });
         
