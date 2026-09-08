@@ -4,21 +4,16 @@ const cloudinary = require('../config/cloudinary');
 const { createClerkClient } = require('@clerk/clerk-sdk-node');
 //const { procesarIAReporte } = require('./iaController');
 
-const ESTADOS_VALIDOS = [
-  'reportado',
-  'validacion_inicial',
-  'aceptado',
-  'asignado',
-  'en_proceso',
-  'resuelto',
-  'verificado',
-  'cerrado',
-  'rechazado',
-  'duplicado',
-  'informacion_insuficiente',
-  'fuera_de_jurisdiccion',
-  'pendiente'
-];
+///agregado conectar la maquina con reporteController.js
+const {
+  ESTADOS_FINALES,
+  estadosPermitidos,
+  validarTransicionEstado,
+  validarTransicionPorRol,
+  registrarCambioEstado
+} = require('../services/reporteWorkflow');
+
+/// se elimino estados validos para que la verdad provenga de services/reporteWorkflow.js
 
 const normalizarTexto = (valor = '') =>
   String(valor)
@@ -333,93 +328,441 @@ const getMisReportes = async (req, res) => {
 };
 
 const updateReporte = async (req, res) => {
+
   try {
+
     const { id } = req.params;
 
+
     const {
-      estado,
       observaciones,
-      operadorAsignadoId,
-      operadorAsignadoNombre,
       prioridad,
       categoria,
       motivoRechazo,
       motivoCierre
     } = req.body;
 
-    const reporte = await Reporte.findById(id);
+
+    const reporte =
+      await Reporte.findById(id);
+
 
     if (!reporte) {
-      return res.status(404).json({ error: 'Reporte no encontrado' });
-    }
 
-    const user = await ensureUserExists(req.auth.userId);
-
-    const esPropietario = reporte.usuarioId === req.auth.userId;
-    const esAdmin = user?.rol === 'admin' || user?.role === 'admin';
-    const esOperador = user?.rol === 'operador' || user?.role === 'operador';
-
-    if (!esPropietario && !esAdmin && !esOperador) {
-      return res.status(403).json({ error: 'No autorizado para modificar este reporte' });
-    }
-
-    if (!reporte.historialEstados) {
-      reporte.historialEstados = [];
-    }
-
-    if (estado && estado !== reporte.estado) {
-      if (!ESTADOS_VALIDOS.includes(estado)) {
-        return res.status(400).json({ error: `Estado no válido: ${estado}` });
-      }
-
-      reporte.historialEstados.push({
-        estado,
-        fecha: new Date(),
-        usuarioId: req.auth.userId,
-        usuarioNombre: obtenerNombreUsuario(user),
-        observacion: observaciones || `Cambio de estado a ${estado}`
+      return res.status(404).json({
+        error: 'Reporte no encontrado'
       });
 
-      reporte.estado = estado;
-
-      if (estado === 'asignado') reporte.fechaAsignacion = new Date();
-      if (estado === 'resuelto') reporte.fechaResolucion = new Date();
-      if (estado === 'verificado') {
-        reporte.fechaVerificacion = new Date();
-        reporte.verificadoPorId = req.auth.userId;
-        reporte.verificadoPorNombre = obtenerNombreUsuario(user);
-      }
-      if (estado === 'cerrado') reporte.fechaCierre = new Date();
     }
 
-    if (observaciones) reporte.observaciones = observaciones;
-    if (prioridad) reporte.prioridad = prioridad;
-    if (categoria) reporte.categoria = mapearCategoria(categoria);
-    if (motivoRechazo) reporte.motivoRechazo = motivoRechazo;
-    if (motivoCierre) reporte.motivoCierre = motivoCierre;
 
-    if (operadorAsignadoId !== undefined) {
-      reporte.operadorAsignadoId = operadorAsignadoId;
+    const user =
+      req.user ||
+      await ensureUserExists(req.auth.userId);
+
+
+    const esPropietario =
+      reporte.usuarioId === req.auth.userId;
+
+    const esAdmin =
+      user?.rol === 'admin';
+
+    const esOperador =
+      user?.rol === 'operador' ||
+      user?.rol === 'operator';
+
+
+    if (
+      !esPropietario &&
+      !esAdmin &&
+      !esOperador
+    ) {
+
+      return res.status(403).json({
+        error:
+          'No autorizado para modificar este reporte'
+      });
+
     }
 
-    if (operadorAsignadoNombre !== undefined) {
-      reporte.operadorAsignadoNombre = operadorAsignadoNombre;
+
+    if (observaciones !== undefined) {
+      reporte.observaciones = observaciones;
     }
 
-    reporte.updatedAt = Date.now();
+    if (prioridad) {
+      reporte.prioridad = prioridad;
+    }
+
+    if (categoria) {
+      reporte.categoria =
+        mapearCategoria(categoria);
+    }
+
+    if (motivoRechazo !== undefined) {
+      reporte.motivoRechazo = motivoRechazo;
+    }
+
+    if (motivoCierre !== undefined) {
+      reporte.motivoCierre = motivoCierre;
+    }
+
+
+    reporte.updatedAt =
+      new Date();
+
 
     await reporte.save();
 
+
     res.json({
+
       success: true,
-      message: 'Reporte actualizado',
+
+      message:
+        'Reporte actualizado',
+
       data: reporte
+
     });
+
+
   } catch (error) {
-    console.error('Error updateReporte:', error);
-    res.status(500).json({ error: 'Error al actualizar reporte' });
+
+    console.error(
+      'Error updateReporte:',
+      error
+    );
+
+
+    res.status(500).json({
+
+      error:
+        'Error al actualizar reporte'
+
+    });
+
   }
+
 };
+///controlador exclusivo de la maquina de estados, para que no se pueda modificar el estado desde el updateReporte
+const cambiarEstadoReporte = async (req, res) => {
+
+  try {
+
+    const { id } =
+      req.params;
+
+
+    const {
+      estado,
+      observacion,
+      observaciones,
+      motivoRechazo,
+      motivoCierre
+    } = req.body;
+
+
+    if (!estado) {
+
+      return res.status(400).json({
+        error:
+          'El nuevo estado es obligatorio'
+      });
+
+    }
+
+
+    const reporte =
+      await Reporte.findById(id);
+
+
+    if (!reporte) {
+
+      return res.status(404).json({
+        error:
+          'Reporte no encontrado'
+      });
+
+    }
+
+
+    const user =
+      req.user ||
+      await ensureUserExists(
+        req.auth.userId
+      );
+
+
+    const rol =
+      user?.rol;
+
+
+    const esAdmin =
+      rol === 'admin';
+
+
+    const esOperador =
+      rol === 'operador' ||
+      rol === 'operator';
+
+
+    /*
+     * Ciudadano y otros roles
+     * no pueden manejar estados.
+     */
+    if (
+      !esAdmin &&
+      !esOperador
+    ) {
+
+      return res.status(403).json({
+
+        error:
+          'Tu rol no puede modificar el estado del incidente'
+
+      });
+
+    }
+
+
+    /*
+     * Un operador sólo modifica
+     * incidentes asignados a él.
+     */
+    if (
+      esOperador &&
+      reporte.operadorAsignadoId !==
+        req.auth.userId
+    ) {
+
+      return res.status(403).json({
+
+        error:
+          'Este incidente no está asignado al operador autenticado'
+
+      });
+
+    }
+
+
+    if (
+      estado === reporte.estado
+    ) {
+
+      return res.status(400).json({
+
+        error:
+          `El incidente ya se encuentra en estado ${estado}`
+
+      });
+
+    }
+
+
+    /*
+     * ASIGNADO tiene sus propias operaciones:
+     *
+     * /tomar
+     * /asignar-operador
+     */
+    if (
+      estado === 'asignado'
+    ) {
+
+      return res.status(400).json({
+
+        error:
+          'Para asignar un incidente utilice /tomar o /asignar-operador'
+
+      });
+
+    }
+
+
+    /*
+     * Un estado final no puede volver
+     * a modificarse.
+     */
+    if (
+      ESTADOS_FINALES.includes(
+        reporte.estado
+      )
+    ) {
+
+      return res.status(400).json({
+
+        error:
+          `El incidente se encuentra en un estado final: ${reporte.estado}`
+
+      });
+
+    }
+
+
+    /*
+     * Primera validación:
+     * ¿la transición existe?
+     */
+    if (
+      !validarTransicionEstado(
+        reporte.estado,
+        estado
+      )
+    ) {
+
+      return res.status(400).json({
+
+        error:
+          'Transición de estado no permitida',
+
+        estadoActual:
+          reporte.estado,
+
+        estadoSolicitado:
+          estado,
+
+        estadosPermitidos:
+          estadosPermitidos(
+            reporte.estado
+          )
+
+      });
+
+    }
+
+
+    /*
+     * Segunda validación:
+     * ¿el rol tiene autorización?
+     */
+    if (
+      !validarTransicionPorRol(
+        rol,
+        reporte.estado,
+        estado
+      )
+    ) {
+
+      return res.status(403).json({
+
+        error:
+          'El rol no puede realizar esta transición',
+
+        rol,
+
+        estadoActual:
+          reporte.estado,
+
+        estadoSolicitado:
+          estado
+
+      });
+
+    }
+
+
+    const textoObservacion =
+      observacion ||
+      observaciones ||
+      '';
+
+
+    /*
+     * Este método hace las dos cosas:
+     *
+     * 1. cambia reporte.estado
+     * 2. agrega historialEstados[]
+     */
+    registrarCambioEstado({
+
+      reporte,
+
+      nuevoEstado:
+        estado,
+
+      usuarioId:
+        req.auth.userId,
+
+      usuarioNombre:
+        obtenerNombreUsuario(user),
+
+      observacion:
+        textoObservacion
+
+    });
+
+
+    if (
+      estado === 'verificado'
+    ) {
+
+      reporte.verificadoPorId =
+        req.auth.userId;
+
+      reporte.verificadoPorNombre =
+        obtenerNombreUsuario(user);
+
+    }
+
+
+    if (
+      estado === 'rechazado' &&
+      motivoRechazo !== undefined
+    ) {
+
+      reporte.motivoRechazo =
+        motivoRechazo;
+
+    }
+
+
+    if (
+      estado === 'cerrado' &&
+      motivoCierre !== undefined
+    ) {
+
+      reporte.motivoCierre =
+        motivoCierre;
+
+    }
+
+
+    await reporte.save();
+
+
+    return res.json({
+
+      success: true,
+
+      message:
+        'Estado actualizado correctamente',
+
+      data: reporte
+
+    });
+
+
+  } catch (error) {
+
+    console.error(
+      'Error cambiarEstadoReporte:',
+      error
+    );
+
+
+    return res.status(500).json({
+
+      error:
+        'Error al cambiar estado del incidente'
+
+    });
+
+  }
+
+};
+
+
 
 const deleteReporte = async (req, res) => {
   try {
@@ -468,7 +811,19 @@ const tomarReporte = async (req, res) => {
     const reporte = await Reporte.findById(id);
 
     if (!reporte) {
-      return res.status(404).json({ error: 'Reporte no encontrado' });
+      return res.status(404).json({
+        error: 'Reporte no encontrado'
+      });
+    }
+
+    const esOperador =
+      operador?.rol === 'operador' ||
+      operador?.rol === 'operator';
+
+    if (!esOperador) {
+      return res.status(403).json({
+        error: 'Sólo un operador puede tomar un incidente'
+      });
     }
 
     if (reporte.operadorAsignadoId) {
@@ -477,48 +832,94 @@ const tomarReporte = async (req, res) => {
       });
     }
 
-    const municipioReporte = normalizarTexto(reporte.municipio || reporte.localidad || '');
-    const municipioOperador = normalizarTexto(operador.municipio || operador.localidad || '');
+    /*
+     * La máquina solamente permite:
+     *
+     * ACEPTADO -> ASIGNADO
+     */
+    if (
+      !validarTransicionEstado(
+        reporte.estado,
+        'asignado'
+      )
+    ) {
+      return res.status(400).json({
+        error: 'El incidente no puede ser tomado en su estado actual',
+        estadoActual: reporte.estado,
+        estadosPermitidos: estadosPermitidos(reporte.estado)
+      });
+    }
 
-    if (municipioReporte && municipioOperador && municipioReporte !== municipioOperador) {
+    const municipioReporte =
+      normalizarTexto(
+        reporte.municipio ||
+        reporte.localidad ||
+        ''
+      );
+
+    const municipioOperador =
+      normalizarTexto(
+        operador.municipio ||
+        operador.localidad ||
+        ''
+      );
+
+    if (
+      municipioReporte &&
+      municipioOperador &&
+      municipioReporte !== municipioOperador
+    ) {
       return res.status(403).json({
         error: 'No podés tomar incidentes de otro municipio'
       });
     }
 
-    if (!reporte.historialEstados) {
-      reporte.historialEstados = [];
-    }
+    const nombreOperador =
+      obtenerNombreUsuario(operador);
 
-    const nombreOperador = obtenerNombreUsuario(operador);
+    reporte.operadorAsignadoId =
+      operador.clerkUserId;
 
-    reporte.operadorAsignadoId = operador.clerkUserId;
-    reporte.operadorAsignadoNombre = nombreOperador;
-    reporte.estado = 'asignado';
-    reporte.fechaAsignacion = new Date();
+    reporte.operadorAsignadoNombre =
+      nombreOperador;
 
-    reporte.historialEstados.push({
-      estado: 'asignado',
-      fecha: new Date(),
+    /*
+     * Ya NO hacemos:
+     *
+     * reporte.estado = 'asignado'
+     *
+     * El cambio pasa por la máquina.
+     */
+    registrarCambioEstado({
+      reporte,
+      nuevoEstado: 'asignado',
       usuarioId: operador.clerkUserId,
       usuarioNombre: nombreOperador,
       observacion: 'Incidente tomado por operador'
     });
 
-    reporte.updatedAt = Date.now();
-
     await reporte.save();
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Incidente tomado correctamente',
       data: reporte
     });
+
   } catch (error) {
-    console.error('Error tomando reporte:', error);
-    res.status(500).json({ error: 'Error al tomar incidente' });
+
+    console.error(
+      'Error tomando reporte:',
+      error
+    );
+
+    return res.status(500).json({
+      error: 'Error al tomar incidente'
+    });
   }
 };
+
+    
 
 const updateCategoriaIA = async (req, res) => {
   try {
@@ -550,49 +951,176 @@ const updateCategoriaIA = async (req, res) => {
 const asignarOperador = async (req, res) => {
   try {
     const { id } = req.params;
-    const { operadorId, operadorNombre } = req.body;
+
+    const {
+      operadorId,
+      operadorNombre
+    } = req.body;
 
     if (!operadorId) {
-      return res.status(400).json({ error: 'operadorId es obligatorio' });
+      return res.status(400).json({
+        error: 'operadorId es obligatorio'
+      });
     }
 
-    const reporte = await Reporte.findById(id);
+    const admin =
+      req.user ||
+      await ensureUserExists(
+        req.auth.userId
+      );
+
+    if (admin?.rol !== 'admin') {
+      return res.status(403).json({
+        error:
+          'Sólo un administrador puede asignar operadores'
+      });
+    }
+
+    const reporte =
+      await Reporte.findById(id);
 
     if (!reporte) {
-      return res.status(404).json({ error: 'Reporte no encontrado' });
+      return res.status(404).json({
+        error: 'Reporte no encontrado'
+      });
     }
 
-    reporte.operadorAsignadoId = operadorId;
-    reporte.operadorAsignadoNombre = operadorNombre || 'Operador asignado';
-    reporte.estado = 'asignado';
-    reporte.fechaAsignacion = new Date();
-
-    if (!reporte.historialEstados) {
-      reporte.historialEstados = [];
+    /*
+     * No permitimos reasignar silenciosamente
+     * un incidente ya asignado.
+     */
+    if (reporte.operadorAsignadoId) {
+      return res.status(400).json({
+        error:
+          'El incidente ya tiene un operador asignado'
+      });
     }
 
-    reporte.historialEstados.push({
-      estado: 'asignado',
-      fecha: new Date(),
-      usuarioId: req.auth?.userId || null,
-      usuarioNombre: operadorNombre || 'Administrador municipal',
-      observacion: `Asignado manualmente a ${operadorNombre || operadorId}`
+    /*
+     * La máquina solamente permite:
+     *
+     * ACEPTADO -> ASIGNADO
+     */
+    if (
+      !validarTransicionEstado(
+        reporte.estado,
+        'asignado'
+      )
+    ) {
+      return res.status(400).json({
+        error:
+          'El incidente no puede ser asignado en su estado actual',
+
+        estadoActual:
+          reporte.estado,
+
+        estadosPermitidos:
+          estadosPermitidos(
+            reporte.estado
+          )
+      });
+    }
+
+    /*
+     * Verificamos que el operador
+     * realmente exista.
+     */
+    const operador =
+      await User.findOne({
+        clerkUserId: operadorId
+      });
+
+    if (!operador) {
+      return res.status(404).json({
+        error:
+          'El operador seleccionado no existe'
+      });
+    }
+
+    const rolOperadorValido =
+      operador.rol === 'operador' ||
+      operador.rol === 'operator';
+
+    if (!rolOperadorValido) {
+      return res.status(400).json({
+        error:
+          'El usuario seleccionado no tiene rol de operador'
+      });
+    }
+
+    const municipioReporte =
+      normalizarTexto(
+        reporte.municipio ||
+        reporte.localidad ||
+        ''
+      );
+
+    const municipioOperador =
+      normalizarTexto(
+        operador.municipio ||
+        operador.localidad ||
+        ''
+      );
+
+    if (
+      municipioReporte &&
+      municipioOperador &&
+      municipioReporte !== municipioOperador
+    ) {
+      return res.status(400).json({
+        error:
+          'El operador pertenece a otro municipio'
+      });
+    }
+
+    const nombreOperador =
+      operadorNombre ||
+      obtenerNombreUsuario(operador);
+
+    reporte.operadorAsignadoId =
+      operadorId;
+
+    reporte.operadorAsignadoNombre =
+      nombreOperador;
+
+    /*
+     * El estado y el historial
+     * se modifican mediante la máquina.
+     */
+    registrarCambioEstado({
+      reporte,
+      nuevoEstado: 'asignado',
+      usuarioId: req.auth.userId,
+      usuarioNombre:
+        obtenerNombreUsuario(admin),
+      observacion:
+        `Incidente asignado a ${nombreOperador}`
     });
-
-    reporte.updatedAt = Date.now();
 
     await reporte.save();
 
-    res.json({
+    return res.json({
       success: true,
-      message: 'Operador asignado correctamente',
+      message:
+        'Operador asignado correctamente',
       data: reporte
     });
+
   } catch (error) {
-    console.error('Error asignarOperador:', error);
-    res.status(500).json({ error: 'Error al asignar operador' });
+
+    console.error(
+      'Error asignarOperador:',
+      error
+    );
+
+    return res.status(500).json({
+      error:
+        'Error al asignar operador'
+    });
   }
 };
+
+
 
 module.exports = {
   createReporte,
@@ -600,6 +1128,7 @@ module.exports = {
   getReporteById,
   getMisReportes,
   updateReporte,
+  cambiarEstadoReporte,
   deleteReporte,
   tomarReporte,
   updateCategoriaIA,
