@@ -13,15 +13,17 @@ if (!MONGODB_URI) {
 }
 
 // ==============================================
-// CONFIGURACIÓN - SOLO VILLA MARÍA
+// CONFIGURACIÓN
 // ==============================================
 const CONFIG = {
-    TOTAL_REPORTES: 1000,        // 1000 reportes para Villa María
-    TOTAL_CIUDADANOS: 700,       // 700 ciudadanos de Villa María
+    TOTAL_REPORTES: 1000,
+    TOTAL_CIUDADANOS: 700,
+    TOTAL_OPERADORES: 10,
+    TOTAL_ADMINISTRADORES: 3,
 };
 
 // ==============================================
-// SOLO EL CLIENTE DE VILLA MARÍA
+// CLIENTES
 // ==============================================
 const clientesBase = [
     {
@@ -37,7 +39,7 @@ const clientesBase = [
 ];
 
 // ==============================================
-// CATEGORÍAS PONDERADAS
+// CATEGORÍAS, ESTADOS Y PRIORIDADES
 // ==============================================
 const categoriasPonderadas = [
     { categoria: 'bache', peso: 25 },
@@ -52,15 +54,14 @@ const categoriasPonderadas = [
     { categoria: 'animal_suelto', peso: 1 }
 ];
 
-// ==============================================
-// ESTADOS PONDERADOS
-// ==============================================
 const estadosDistribucion = [
     { estado: 'pendiente', peso: 30 },
     { estado: 'en_proceso', peso: 25 },
     { estado: 'resuelto', peso: 35 },
     { estado: 'rechazado', peso: 10 }
 ];
+
+const ESTADOS_CON_OPERADOR = ['en_proceso', 'resuelto', 'rechazado'];
 
 const prioridades = ['baja', 'media', 'alta', 'critica'];
 
@@ -72,13 +73,7 @@ const nombres = [
     'Laura', 'Martín', 'Natalia', 'Oscar', 'Paula', 'Ricardo', 'Sofía', 'Tomás', 'Valentina', 'Walter',
     'Camila', 'Lucas', 'Micaela', 'Nicolás', 'Rocío', 'Agustín', 'Florencia', 'Marcos', 'Julieta', 'Sebastián',
     'Lucía', 'Mateo', 'Pilar', 'Ramiro', 'Victoria', 'Emilia', 'Franco', 'Josefina', 'Lautaro', 'Malena',
-    'Renata', 'Santiago', 'Delfina', 'Benjamín', 'Martina', 'Thiago', 'Catalina', 'Juan', 'Emma', 'Pedro',
-    'Abril', 'Santino', 'Valeria', 'Felipe', 'Mora', 'Ignacio', 'Ambar', 'Tobías', 'Dolores', 'Simón',
-    'Alma', 'Lorenzo', 'Oliva', 'Maximiliano', 'Aitana', 'Julián', 'Inés', 'Damián', 'Clara', 'Esteban',
-    'Lara', 'Cristian', 'Noelia', 'Gonzalo', 'Malvina', 'Alejandro', 'Sol', 'Marcelo', 'Ruth', 'Andrés',
-    'Aylin', 'Gael', 'Cecilia', 'Brandon', 'Dana', 'Mathías', 'Silvina', 'Brian', 'Aisha', 'Leonel',
-    'Nayla', 'Román', 'Mía', 'Emanuel', 'Violeta', 'Hans', 'Alicia', 'Klaus', 'Mirta', 'Luis',
-    'Brenda', 'César', 'Daniela', 'Enrique', 'Fátima', 'Guillermo', 'Hilda', 'Iván', 'Jacqueline', 'Kevin'
+    'Renata', 'Santiago', 'Delfina', 'Benjamín', 'Martina', 'Thiago', 'Catalina', 'Juan', 'Emma', 'Pedro'
 ];
 
 const apellidos = [
@@ -86,8 +81,7 @@ const apellidos = [
     'Morales', 'Ortiz', 'Cruz', 'Reyes', 'Gutiérrez', 'Mendoza', 'Herrera', 'Vargas', 'Medina', 'Flores',
     'Rivera', 'Rojas', 'Muñoz', 'Álvarez', 'Castillo', 'Silva', 'García', 'Martínez', 'Núñez', 'Acosta',
     'Paredes', 'Duarte', 'Ramos', 'Valdez', 'Luna', 'Ponce', 'Quiroga', 'Molina', 'Barrios', 'Salazar',
-    'Guerrero', 'Arias', 'Peralta', 'Giménez', 'Salas', 'Córdoba', 'Maldonado', 'Bustos', 'Domínguez', 'Correa',
-    'Navarro', 'Delgado', 'Márquez', 'Zúñiga', 'Ortega', 'Soto', 'Espinoza', 'Castro', 'Pacheco', 'Figueroa'
+    'Guerrero', 'Arias', 'Peralta', 'Giménez', 'Salas', 'Córdoba', 'Maldonado', 'Bustos', 'Domínguez', 'Correa'
 ];
 
 // ==============================================
@@ -98,100 +92,54 @@ const titulosPorCategoria = {
         'Bache profundo en Av. Libertador',
         'Pozo peligroso en calle 5 de Mayo',
         'Calle deteriorada en barrio Los Olivos',
-        'Bache en Av. Principal afecta tránsito',
-        'Hundimiento en calle San Martín',
-        'Bache sin señalización en zona escolar',
-        'Calle con múltiples baches en barrio Centro',
-        'Pozo en calle Rivadavia'
+        'Bache en Av. Principal afecta tránsito'
     ],
     alumbrado: [
         'Luminaria fuera de servicio en calle 9 de Julio',
         'Zona oscura en barrio La Floresta',
         'Poste de luz intermitente en Av. Sabattini',
-        'Cuadrante completo sin luz en barrio San Juan',
-        'Farola averiada en esquina peligrosa',
-        'Alumbrado público deficiente en ruta 2',
-        'Luz de calle no funciona en barrio Jardín',
-        'Falta de luminarias en calle Sarmiento'
+        'Cuadrante completo sin luz en barrio San Juan'
     ],
     basura: [
         'Basura acumulada en calle Córdoba',
         'Contenedores desbordados en barrio Belgrano',
-        'Residuos sin retirar en la cuadra de Av. Perón',
-        'Punto de arrojo ilegal en calle 25 de Mayo',
-        'Acumulación de bolsas en la vía pública',
-        'Contenedor rebalsado en barrio Centro',
-        'Basural en calle San Luis',
-        'Recolección de basura irregular en zona norte'
+        'Residuos sin retirar en la cuadra de Av. Perón'
     ],
     agua: [
         'Pérdida de agua en calle Independencia',
         'Fuga constante en cañería de calle Buenos Aires',
         'Agua acumulada en calzada de Av. España',
-        'Rotura de caño en calle Chile',
-        'Filtración en la vía pública de barrio Eva Perón',
-        'Acumulación de agua estancada en calle Moreno',
-        'Brotación de agua desde el pavimento en calle Urquiza',
-        'Pérdida de agua potable en barrio San Martín'
+        'Rotura de caño en calle Chile'
     ],
     semaforo: [
         'Semáforo sin funcionar en Av. Libertador y San Martín',
         'Semáforo intermitente en calle 9 de Julio',
-        'Cruce peligroso en Av. Sabattini y Rivadavia',
-        'Semáforo dañado en Av. Perón',
-        'Luz roja intermitente en calle Córdoba',
-        'Semáforo en modo amarillo todo el día en Av. España',
-        'Cruce con visibilidad reducida en calle San Juan',
-        'Semáforo peatonal no funciona en barrio Centro'
+        'Cruce peligroso en Av. Sabattini y Rivadavia'
     ],
     inseguridad: [
         'Zona insegura en barrio La Floresta',
         'Actividad sospechosa en calle 5 de Mayo',
-        'Sector con alta incidencia delictiva en barrio San Juan',
-        'Calle poco transitada insegura en zona sur',
-        'Robos constantes en Av. Libertador',
-        'Necesidad de más patrullaje en barrio Los Olivos',
-        'Vivienda abandonada en calle Moreno',
-        'Venta de drogas en la esquina de Av. Sabattini'
+        'Sector con alta incidencia delictiva en barrio San Juan'
     ],
     vereda: [
         'Vereda rota en calle San Martín',
         'Baldosas levantadas en Av. Principal',
-        'Obstrucción peatonal en calle Córdoba',
-        'Vereda con desniveles en barrio Centro',
-        'Piso irregular en calle 25 de Mayo',
-        'Baldosas sueltas en zona comercial',
-        'Vereda hundida en calle Chile',
-        'Mala condición de vereda en barrio Jardín'
+        'Obstrucción peatonal en calle Córdoba'
     ],
     ruido: [
         'Ruidos molestos en barrio Centro',
         'Música alta en calle Rivadavia',
-        'Molestias sonoras en zona residencial',
-        'Fiesta constante en barrio Los Olivos',
-        'Ruido de obra en calle Urquiza',
-        'Alarma de vehículo en Av. Perón',
-        'Calle con contaminación sonora en zona norte',
-        'Eventos sin permiso en barrio San Juan'
+        'Molestias sonoras en zona residencial'
     ],
     animal_suelto: [
         'Perro suelto en Av. Libertador',
         'Caballo suelto en ruta 2',
-        'Animales abandonados en barrio La Floresta',
-        'Potro suelto en calle 9 de Julio',
-        'Jauría de perros en barrio Belgrano',
-        'Animal doméstico sin dueño en calle San Martín',
-        'Vaca suelta en zona periurbana'
+        'Animales abandonados en barrio La Floresta'
     ],
     microbasural: [
         'Microbasural en terreno baldío de calle Moreno',
         'Acumulación de residuos en barrio San Juan',
-        'Basural informal en Av. Sabattini',
-        'Punto de arrojo ilegal en calle Córdoba',
-        'Escombros en la vía pública de barrio Eva Perón',
-        'Foco de basura en calle Chile',
-        'Tiradero a cielo abierto en zona sur',
-        'Acopio de materiales en calle Urquiza'
+        'Basural informal en Av. Sabattini'
     ]
 };
 
@@ -227,17 +175,17 @@ function buildTitulo(categoria) {
 }
 
 // ==============================================
-// GENERAR USUARIOS ADMINISTRATIVOS (solo Villa María)
+// GENERAR USUARIOS ADMINISTRATIVOS
 // ==============================================
 function generarUsuariosAdministrativos(clientes) {
     const usuarios = [];
-    
-    // Superadmin
+
+    // Superadmin (1 solo)
     usuarios.push({
         clerkUserId: 'demo_superadmin_urbanflow',
         email: 'superadmin@urbanflow.demo',
         nombre: 'Super',
-        apellido: 'Usuario',
+        apellido: 'Administrador',
         rol: 'superadmin',
         ciudad: 'Villa María',
         localidad: 'Villa María',
@@ -246,58 +194,49 @@ function generarUsuariosAdministrativos(clientes) {
         esDemo: true
     });
 
-    // Solo para Villa María
     const cliente = clientes[0];
-    usuarios.push({
-        clerkUserId: 'demo_admin_villamaria',
-        email: 'admin.villamaria@urbanflow.demo',
-        nombre: 'Admin',
-        apellido: 'VillaMaría',
-        rol: 'admin',
-        clienteId: cliente._id,
-        clienteNombre: cliente.nombre,
-        ciudad: cliente.localidad,
-        localidad: cliente.localidad,
-        provincia: cliente.provincia,
-        pais: cliente.pais,
-        esDemo: true
-    });
 
-    usuarios.push({
-        clerkUserId: 'demo_operador_villamaria',
-        email: 'operador.villamaria@urbanflow.demo',
-        nombre: 'Operador',
-        apellido: 'VillaMaría',
-        rol: 'operador',
-        clienteId: cliente._id,
-        clienteNombre: cliente.nombre,
-        ciudad: cliente.localidad,
-        localidad: cliente.localidad,
-        provincia: cliente.provincia,
-        pais: cliente.pais,
-        esDemo: true
-    });
+    // Administradores (3)
+    for (let i = 1; i <= CONFIG.TOTAL_ADMINISTRADORES; i++) {
+        usuarios.push({
+            clerkUserId: `demo_admin_${i}`,
+            email: `admin${i}@urbanflow.demo`,
+            nombre: `Admin${i}`,
+            apellido: 'VillaMaría',
+            rol: 'admin',
+            clienteId: cliente._id,
+            clienteNombre: cliente.nombre,
+            ciudad: cliente.localidad,
+            localidad: cliente.localidad,
+            provincia: cliente.provincia,
+            pais: cliente.pais,
+            esDemo: true
+        });
+    }
 
-    usuarios.push({
-        clerkUserId: 'demo_moderador_villamaria',
-        email: 'moderador.villamaria@urbanflow.demo',
-        nombre: 'Moderador',
-        apellido: 'VillaMaría',
-        rol: 'moderador',
-        clienteId: cliente._id,
-        clienteNombre: cliente.nombre,
-        ciudad: cliente.localidad,
-        localidad: cliente.localidad,
-        provincia: cliente.provincia,
-        pais: cliente.pais,
-        esDemo: true
-    });
+    // Operadores (10)
+    for (let i = 1; i <= CONFIG.TOTAL_OPERADORES; i++) {
+        usuarios.push({
+            clerkUserId: `demo_operador_${i}`,
+            email: `operador${i}@urbanflow.demo`,
+            nombre: `Operador${i}`,
+            apellido: 'VillaMaría',
+            rol: 'operador',
+            clienteId: cliente._id,
+            clienteNombre: cliente.nombre,
+            ciudad: cliente.localidad,
+            localidad: cliente.localidad,
+            provincia: cliente.provincia,
+            pais: cliente.pais,
+            esDemo: true
+        });
+    }
 
     return usuarios;
 }
 
 // ==============================================
-// GENERAR CIUDADANOS (solo Villa María)
+// GENERAR CIUDADANOS
 // ==============================================
 function generarCiudadanos(cantidad, clientes) {
     const usuarios = [];
@@ -306,15 +245,12 @@ function generarCiudadanos(cantidad, clientes) {
     for (let i = 0; i < cantidad; i++) {
         const nombre = nombres[i % nombres.length];
         const apellido = randomItem(apellidos);
-        const edad = 18 + Math.floor(Math.random() * 60);
 
         usuarios.push({
             clerkUserId: `demo_ciudadano_${i + 1}`,
             email: `ciudadano${i + 1}@urbanflow.demo`,
             nombre,
             apellido,
-            edad,
-            telefono: `+5493534${String(100000 + i).padStart(6, '0')}`,
             direccion: `Calle ${i + 1}, Villa María`,
             ciudad: cliente.localidad,
             localidad: cliente.localidad,
@@ -331,12 +267,31 @@ function generarCiudadanos(cantidad, clientes) {
 }
 
 // ==============================================
-// GENERAR REPORTES (solo Villa María)
+// GENERAR REPORTES CON OPERADORES ASIGNADOS
 // ==============================================
-function generarReportes(cantidad, clientes, ciudadanos) {
+function generarReportes(cantidad, clientes, ciudadanos, operadores) {
     const reportes = [];
     const cliente = clientes[0];
-    
+    const ahora = new Date();
+    const hace6Meses = new Date(ahora);
+    hace6Meses.setMonth(hace6Meses.getMonth() - 6);
+
+    // Contador round-robin POR ESTADO
+    const contadorRoundRobin = {
+        en_proceso: 0,
+        resuelto: 0,
+        rechazado: 0
+    };
+
+    function asignarOperador(estado) {
+        if (!ESTADOS_CON_OPERADOR.includes(estado)) {
+            return null; // pendiente: sin operador
+        }
+        const idx = contadorRoundRobin[estado] % operadores.length;
+        contadorRoundRobin[estado] += 1;
+        return operadores[idx];
+    }
+
     for (let i = 0; i < cantidad; i++) {
         const ciudadano = ciudadanos[i % ciudadanos.length];
         const categoriaObj = randomWeighted(categoriasPonderadas);
@@ -345,42 +300,75 @@ function generarReportes(cantidad, clientes, ciudadanos) {
         const estado = estadoObj.estado;
         const prioridad = randomItem(prioridades);
         const titulo = buildTitulo(categoria);
-        
-        const ahora = new Date();
-        const hace6Meses = new Date(ahora);
-        hace6Meses.setMonth(hace6Meses.getMonth() - 6);
         const fechaCreacion = randomDate(hace6Meses, ahora);
 
-        // Ubicaciones aleatorias alrededor de Villa María
+        const operador = asignarOperador(estado);
+
+        let fechaResolucion = null;
+        if (estado === 'resuelto') {
+            const dias = 1 + Math.floor(Math.random() * 15);
+            fechaResolucion = new Date(fechaCreacion.getTime() + dias * 24 * 60 * 60 * 1000);
+        }
+
+        let fechaAsignacion = null;
+        if (operador) {
+            const dias = Math.floor(Math.random() * 4);
+            fechaAsignacion = new Date(fechaCreacion.getTime() + dias * 24 * 60 * 60 * 1000);
+        }
+
+        let fechaEnProceso = null;
+        let fechaPendiente = null;
+        let fechaRechazado = null;
+
+        if (estado === 'en_proceso') fechaEnProceso = fechaCreacion;
+        if (estado === 'pendiente') fechaPendiente = fechaCreacion;
+        if (estado === 'rechazado') fechaRechazado = fechaCreacion;
+        if (estado === 'resuelto') {
+            fechaEnProceso = new Date(fechaCreacion.getTime() + 1 * 24 * 60 * 60 * 1000);
+            fechaPendiente = new Date(fechaCreacion.getTime() + 2 * 24 * 60 * 60 * 1000);
+        }
+
         const lat = randomCoordinate(-32.4075, 0.03);
         const lng = randomCoordinate(-63.2402, 0.03);
 
         reportes.push({
-            usuarioId: ciudadano.clerkUserId,
-            usuarioEmail: ciudadano.email,
-            clienteId: cliente._id,
-            clienteNombre: cliente.nombre,
             titulo: titulo,
             columna_unica: `${titulo} - Villa María`,
+            observaciones: `Reportado por ${ciudadano.nombre} ${ciudadano.apellido}. Prioridad: ${prioridad}.`,
+            categoria_asignada_por_ia: categoria,
+            categoria_manual: null,
+            estado: estado,
+            prioridad: prioridad,
+            prioridad_score: prioridad === 'critica' ? 4 : prioridad === 'alta' ? 3 : prioridad === 'media' ? 2 : 1,
+            fecha_hora: fechaCreacion,
+            fecha_resolucion: fechaResolucion,
+            fecha_asignacion_operador: fechaAsignacion,
+            fecha_en_proceso: fechaEnProceso,
+            fecha_pendiente: fechaPendiente,
+            fecha_rechazado: fechaRechazado,
+            usuarioId: ciudadano.clerkUserId,
+            usuarioEmail: ciudadano.email,
+            usuarioNombre: `${ciudadano.nombre} ${ciudadano.apellido}`,
+            operadorAsignadoId: operador ? operador.clerkUserId : null,
+            operadorNombre: operador ? `${operador.nombre} ${operador.apellido}` : null,
+            clienteId: cliente._id,
+            clienteNombre: cliente.nombre,
             direccion: `Ubicación ${i + 1}, Villa María`,
-            latitud: lat,
-            longitud: lng,
             localidad: cliente.localidad,
             provincia: cliente.provincia,
             pais: cliente.pais,
-            observaciones: `Reportado por ${ciudadano.nombre} ${ciudadano.apellido}. Prioridad: ${prioridad}.`,
-            categoria_asignada_por_ia: categoria,
+            latitud: lat,
+            longitud: lng,
             ia_procesado: true,
-            prioridad: prioridad,
-            etiquetas: [categoria, 'villa_maria', prioridad, estado],
             ai_summary: `${titulo} en Villa María. Prioridad: ${prioridad}. Estado: ${estado}.`,
-            ai_priority_score: prioridad === 'critica' ? 90 + Math.random() * 10 : 
-                               prioridad === 'alta' ? 70 + Math.random() * 20 : 
-                               prioridad === 'media' ? 40 + Math.random() * 30 : 
+            ai_priority_score: prioridad === 'critica' ? 90 + Math.random() * 10 :
+                               prioridad === 'alta' ? 70 + Math.random() * 20 :
+                               prioridad === 'media' ? 40 + Math.random() * 30 :
                                10 + Math.random() * 30,
-            estado: estado,
-            fecha_hora: fechaCreacion,
-            esDemo: true
+            etiquetas: [categoria, 'villa_maria', prioridad, estado],
+            esDemo: true,
+            createdAt: fechaCreacion,
+            updatedAt: fechaCreacion
         });
     }
 
@@ -402,8 +390,8 @@ async function seedDemo() {
         await Cliente.deleteMany({ esDemo: true });
         console.log('✅ Datos limpios\n');
 
-        // 1. CLIENTE (solo Villa María)
-        console.log('📋 Creando cliente: Municipalidad de Villa María...');
+        // 1. CLIENTE
+        console.log('📋 Creando cliente...');
         const clientes = await Cliente.insertMany(
             clientesBase.map(c => ({ ...c, esDemo: true }))
         );
@@ -411,9 +399,9 @@ async function seedDemo() {
 
         // 2. USUARIOS ADMINISTRATIVOS
         console.log('👤 Creando usuarios administrativos...');
-        const admins = generarUsuariosAdministrativos(clientes);
+        const adminsData = generarUsuariosAdministrativos(clientes);
         let adminCount = 0;
-        for (const admin of admins) {
+        for (const admin of adminsData) {
             await User.findOneAndUpdate(
                 { clerkUserId: admin.clerkUserId },
                 { $set: admin },
@@ -424,7 +412,7 @@ async function seedDemo() {
         console.log(`✅ ${adminCount} usuarios administrativos creados\n`);
 
         // 3. CIUDADANOS
-        console.log(`👤 Creando ${CONFIG.TOTAL_CIUDADANOS} ciudadanos de Villa María...`);
+        console.log(`👤 Creando ${CONFIG.TOTAL_CIUDADANOS} ciudadanos...`);
         const ciudadanosData = generarCiudadanos(CONFIG.TOTAL_CIUDADANOS, clientes);
         let ciudadanoCount = 0;
         for (const ciudadano of ciudadanosData) {
@@ -440,13 +428,19 @@ async function seedDemo() {
         }
         console.log(`✅ ${ciudadanoCount} ciudadanos creados\n`);
 
-        // Obtener ciudadanos para reportes
+        // 4. OBTENER OPERADORES
+        const operadores = await User.find({ rol: 'operador', esDemo: true });
         const ciudadanos = await User.find({ rol: 'ciudadano', esDemo: true });
 
-        // 4. REPORTES
-        console.log(`📝 Creando ${CONFIG.TOTAL_REPORTES} reportes para Villa María...`);
-        const reportesData = generarReportes(CONFIG.TOTAL_REPORTES, clientes, ciudadanos);
-        
+        console.log(`🔍 Operadores encontrados: ${operadores.length} (esperado: ${CONFIG.TOTAL_OPERADORES})`);
+        if (operadores.length === 0) {
+            throw new Error('❌ No se encontraron operadores. Revisá el campo "rol" en el modelo User.');
+        }
+
+        // 5. REPORTES
+        console.log(`📝 Creando ${CONFIG.TOTAL_REPORTES} reportes...`);
+        const reportesData = generarReportes(CONFIG.TOTAL_REPORTES, clientes, ciudadanos, operadores);
+
         const BATCH_SIZE = 100;
         let insertados = 0;
         for (let i = 0; i < reportesData.length; i += BATCH_SIZE) {
@@ -457,42 +451,44 @@ async function seedDemo() {
         }
         console.log(`✅ ${reportesData.length} reportes creados\n`);
 
-        // 5. ESTADÍSTICAS
+        // 6. ESTADÍSTICAS
         const totalUsers = await User.countDocuments({ esDemo: true });
         const totalReportes = await Reporte.countDocuments({ esDemo: true });
-        
-        console.log('📊 ESTADÍSTICAS FINALES - VILLA MARÍA:');
+
+        console.log('📊 ESTADÍSTICAS FINALES:');
         console.log('─────────────────────────────────────────');
         console.log(`🏢 Cliente: ${clientes[0].nombre}`);
         console.log(`👤 Usuarios totales: ${totalUsers}`);
-        console.log(`   ├─ Administrativos: ${adminCount}`);
+        console.log(`   ├─ Superadmin: 1`);
+        console.log(`   ├─ Administradores: ${CONFIG.TOTAL_ADMINISTRADORES}`);
+        console.log(`   ├─ Operadores: ${CONFIG.TOTAL_OPERADORES}`);
         console.log(`   └─ Ciudadanos: ${ciudadanoCount}`);
         console.log(`📋 Reportes: ${totalReportes}`);
-        
-        const statsCategoria = await Reporte.aggregate([
-            { $match: { esDemo: true } },
-            { $group: { _id: '$categoria_asignada_por_ia', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
+
+        // Estadísticas por operador y estado
+        const statsAsignacion = await Reporte.aggregate([
+            { $match: { esDemo: true, operadorAsignadoId: { $ne: null } } },
+            { $group: { _id: { operador: '$operadorAsignadoId', estado: '$estado' }, count: { $sum: 1 } } },
+            { $sort: { '_id.operador': 1, '_id.estado': 1 } }
         ]);
-        
-        console.log('\n📂 Distribución por categoría:');
-        statsCategoria.forEach(s => {
-            console.log(`   ${s._id}: ${s.count} (${(s.count/totalReportes*100).toFixed(1)}%)`);
+
+        console.log('\n🔧 Incidentes asignados por operador y estado:');
+        const porOperador = {};
+        statsAsignacion.forEach(s => {
+            const op = s._id.operador;
+            if (!porOperador[op]) porOperador[op] = {};
+            porOperador[op][s._id.estado] = s.count;
+        });
+        Object.entries(porOperador).forEach(([op, estados]) => {
+            const detalle = Object.entries(estados).map(([e, c]) => `${e}: ${c}`).join(', ');
+            console.log(`   ${op} -> ${detalle}`);
         });
 
-        const statsEstado = await Reporte.aggregate([
-            { $match: { esDemo: true } },
-            { $group: { _id: '$estado', count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-        ]);
-        
-        console.log('\n📊 Distribución por estado:');
-        statsEstado.forEach(s => {
-            console.log(`   ${s._id}: ${s.count} (${(s.count/totalReportes*100).toFixed(1)}%)`);
-        });
+        const totalSinAsignar = await Reporte.countDocuments({ esDemo: true, operadorAsignadoId: null });
+        console.log(`\n📥 Reportes sin operador asignado (pendientes): ${totalSinAsignar}`);
 
         console.log('\n✅ SEED DEMO FINALIZADO CORRECTAMENTE');
-        console.log('📌 TODOS LOS DATOS SON PARA VILLA MARÍA');
+        console.log('📌 DATOS OPTIMIZADOS PARA POWER BI');
         console.log('─────────────────────────────────────────\n');
 
         await mongoose.disconnect();
