@@ -1,24 +1,14 @@
 const Reporte = require('../models/Reporte');
+const {
+  ESTADOS_REPORTE,
+  CATEGORIAS_REPORTE,
+  PRIORIDADES_REPORTE,
+  ETIQUETAS_CATEGORIA,
+  normalizarCategoria
+} = require('../models/Reporte');
 const User = require('../models/User');
 const cloudinary = require('../config/cloudinary');
 const { createClerkClient } = require('@clerk/clerk-sdk-node');
-//const { procesarIAReporte } = require('./iaController');
-
-const ESTADOS_VALIDOS = [
-  'reportado',
-  'validacion_inicial',
-  'aceptado',
-  'asignado',
-  'en_proceso',
-  'resuelto',
-  'verificado',
-  'cerrado',
-  'rechazado',
-  'duplicado',
-  'informacion_insuficiente',
-  'fuera_de_jurisdiccion',
-  'pendiente'
-];
 
 const normalizarTexto = (valor = '') =>
   String(valor)
@@ -70,28 +60,28 @@ const detectarMunicipioPorCoordenadas = (lat, lng) => {
   return 'sin-municipio';
 };
 
-const mapearCategoria = (valor = '') => {
-  const v = normalizarTexto(valor);
-
-  if (v.includes('bache')) return 'bache';
-  if (v.includes('basura') || v.includes('residuo')) return 'basura';
-  if (v.includes('luminaria') || v.includes('luz') || v.includes('alumbrado')) return 'luminaria';
-  if (v.includes('semaforo')) return 'semaforo';
-  if (v.includes('seguridad')) return 'seguridad';
-  if (v.includes('animal') || v.includes('perro')) return 'animal_suelto';
-  if (v.includes('arbol')) return 'arbolado';
-  if (v.includes('agua') || v.includes('cloaca')) return 'agua_cloaca';
-  if (v.includes('transito')) return 'transito';
-
-  return 'otros';
+// Endpoint de catálogo único para evitar hardcodeo en los 4 roles del frontend
+const getCatalogos = (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      categorias: CATEGORIAS_REPORTE.map((clave) => ({
+        value: clave,
+        label: ETIQUETAS_CATEGORIA[clave] || clave
+      })),
+      estados: ESTADOS_REPORTE,
+      prioridades: PRIORIDADES_REPORTE
+    }
+  });
 };
 
 const createReporte = async (req, res) => {
   try {
-    const campos = ['titulo', 'columna_unica', 'direccion'];
+    // 'titulo' ya NO es obligatorio en el input: el modelo lo autogenera limpio si viene vacío
+    const camposRequeridos = ['columna_unica', 'direccion'];
 
-    for (const campo of campos) {
-      if (!req.body[campo]) {
+    for (const campo of camposRequeridos) {
+      if (!req.body[campo] || !String(req.body[campo]).trim()) {
         return res.status(400).json({
           error: `Campo requerido faltante: ${campo}`
         });
@@ -114,6 +104,7 @@ const createReporte = async (req, res) => {
       localidad,
       provincia,
       categoria,
+      categoria_detalle,
       categoria_asignada_por_ia,
       prioridad
     } = req.body;
@@ -123,10 +114,11 @@ const createReporte = async (req, res) => {
       localidad ||
       detectarMunicipioPorCoordenadas(latitud, longitud);
 
-    const categoriaFinal = mapearCategoria(
+    const { categoria: categoriaFinal, detalleExtra } = normalizarCategoria(
       categoria || categoria_asignada_por_ia || titulo || columna_unica
     );
 
+    const detalleFinal = (categoria_detalle || detalleExtra || '').trim();
     const estadoInicial = 'reportado';
 
     const reporte = new Reporte({
@@ -136,9 +128,10 @@ const createReporte = async (req, res) => {
       clienteId: req.body.clienteId || null,
       clienteNombre: req.body.clienteNombre || null,
 
-      titulo: titulo.trim(),
-      columna_unica: columna_unica.trim(),
-      direccion: direccion.trim(),
+      // Si titulo viene vacío, el hook pre('validate') de Reporte.js lo construye automáticamente
+      titulo: titulo ? String(titulo).trim() : '',
+      columna_unica: String(columna_unica).trim(),
+      direccion: String(direccion).trim(),
 
       latitud: latitud !== undefined && latitud !== null ? Number(latitud) : 0,
       longitud: longitud !== undefined && longitud !== null ? Number(longitud) : 0,
@@ -153,8 +146,9 @@ const createReporte = async (req, res) => {
 
       estado: estadoInicial,
       categoria: categoriaFinal,
+      categoria_detalle: detalleFinal,
       categoria_asignada_por_ia: categoria_asignada_por_ia || null,
-      prioridad: prioridad || 'media',
+      prioridad: PRIORIDADES_REPORTE.includes(prioridad) ? prioridad : 'media',
 
       historialEstados: [
         {
@@ -166,7 +160,7 @@ const createReporte = async (req, res) => {
         }
       ],
 
-      observaciones: observaciones ? observaciones.trim() : '',
+      observaciones: observaciones ? String(observaciones).trim() : '',
       fecha_hora: req.body.fecha_hora ? new Date(req.body.fecha_hora) : new Date(),
 
       archivo_url: archivo_url || undefined,
@@ -175,9 +169,6 @@ const createReporte = async (req, res) => {
 
       esDemo: req.body.esDemo || false
     });
-
-       console.log('🧪 ESTADO QUE SE VA A GUARDAR:', reporte.estado);
-       console.log('🧪 HISTORIAL QUE SE VA A GUARDAR:', reporte.historialEstados);
 
     await reporte.save();
 
@@ -231,6 +222,7 @@ const getReportes = async (req, res) => {
 
       filtro.$or = [
         { categoria: categoriaRegex },
+        { categoria_detalle: categoriaRegex },
         { categoria_asignada_por_ia: categoriaRegex },
         { etiquetas: categoriaRegex }
       ];
@@ -343,6 +335,7 @@ const updateReporte = async (req, res) => {
       operadorAsignadoNombre,
       prioridad,
       categoria,
+      categoria_detalle,
       motivoRechazo,
       motivoCierre
     } = req.body;
@@ -368,7 +361,7 @@ const updateReporte = async (req, res) => {
     }
 
     if (estado && estado !== reporte.estado) {
-      if (!ESTADOS_VALIDOS.includes(estado)) {
+      if (!ESTADOS_REPORTE.includes(estado)) {
         return res.status(400).json({ error: `Estado no válido: ${estado}` });
       }
 
@@ -393,8 +386,22 @@ const updateReporte = async (req, res) => {
     }
 
     if (observaciones) reporte.observaciones = observaciones;
-    if (prioridad) reporte.prioridad = prioridad;
-    if (categoria) reporte.categoria = mapearCategoria(categoria);
+    if (prioridad && PRIORIDADES_REPORTE.includes(prioridad)) {
+      reporte.prioridad = prioridad;
+    }
+
+    if (categoria) {
+      const { categoria: catNorm, detalleExtra } = normalizarCategoria(categoria);
+      reporte.categoria = catNorm;
+      if (categoria_detalle !== undefined) {
+        reporte.categoria_detalle = String(categoria_detalle).trim();
+      } else if (detalleExtra) {
+        reporte.categoria_detalle = detalleExtra;
+      }
+    } else if (categoria_detalle !== undefined) {
+      reporte.categoria_detalle = String(categoria_detalle).trim();
+    }
+
     if (motivoRechazo) reporte.motivoRechazo = motivoRechazo;
     if (motivoCierre) reporte.motivoCierre = motivoCierre;
 
@@ -524,12 +531,13 @@ const updateCategoriaIA = async (req, res) => {
   try {
     const { id } = req.params;
     const { categoria_asignada_por_ia } = req.body;
+    const { categoria: catNorm } = normalizarCategoria(categoria_asignada_por_ia);
 
     const reporte = await Reporte.findByIdAndUpdate(
       id,
       {
         categoria_asignada_por_ia,
-        categoria: mapearCategoria(categoria_asignada_por_ia),
+        categoria: catNorm,
         ia_procesado: true,
         updatedAt: Date.now()
       },
@@ -595,6 +603,7 @@ const asignarOperador = async (req, res) => {
 };
 
 module.exports = {
+  getCatalogos,
   createReporte,
   getReportes,
   getReporteById,

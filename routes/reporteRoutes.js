@@ -5,6 +5,10 @@ const { authMiddleware } = require('../middleware/auth');
 const { adminMiddleware } = require('../middleware/admin');
 const reporteController = require('../controllers/reporteController');
 
+// Rutas públicas / catálogos maestros
+router.get('/catalogos', reporteController.getCatalogos);
+router.get('/', reporteController.getReportes);
+
 // Rutas protegidas
 router.post('/', authMiddleware, reporteController.createReporte);
 router.get('/mis-reportes', authMiddleware, reporteController.getMisReportes);
@@ -19,9 +23,6 @@ router.patch('/:id/asignar-operador', authMiddleware, reporteController.asignarO
 router.get('/:id', authMiddleware, reporteController.getReporteById);
 router.put('/:id', authMiddleware, reporteController.updateReporte);
 router.delete('/:id', authMiddleware, reporteController.deleteReporte);
-
-// Ruta pública
-router.get('/', reporteController.getReportes);
 
 // IA / Admin
 router.put(
