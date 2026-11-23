@@ -13,11 +13,10 @@ router.get('/', reporteController.getReportes);
 router.post('/', authMiddleware, reporteController.createReporte);
 router.get('/mis-reportes', authMiddleware, reporteController.getMisReportes);
 
-// Tomar incidente por operador
+// Tomar incidente por operador / cambiar estado / asignar operador
 router.put('/:id/tomar', authMiddleware, reporteController.tomarReporte);
-router.patch('/:id/tomar', authMiddleware, reporteController.tomarReporte);
-router.patch('/:id/estado', authMiddleware, reporteController.cambiarEstadoReporte);
-router.patch('/:id/asignar-operador', authMiddleware, reporteController.asignarOperador);
+router.put('/:id/estado', authMiddleware, reporteController.cambiarEstadoReporte);
+router.put('/:id/asignar-operador', authMiddleware, reporteController.asignarOperador);
 
 // CRUD reportes
 router.get('/:id', authMiddleware, reporteController.getReporteById);
