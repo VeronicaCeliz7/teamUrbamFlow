@@ -28,6 +28,7 @@ const CATEGORIAS_REPORTE = [
   'arbolado',
   'agua_cloaca',
   'transito',
+  'vereda',
   'otros'
 ];
 
@@ -37,6 +38,59 @@ const PRIORIDADES_REPORTE = [
   'alta',
   'critica'
 ];
+
+// Mapa Adapter para unificar sinónimos históricos o entradas sucias sin romper el enum
+const ALIAS_CATEGORIAS = {
+  alumbrado: 'luminaria',
+  iluminacion: 'luminaria',
+  luz: 'luminaria',
+  microbasural: 'basura',
+  residuos: 'basura',
+  agua: 'agua_cloaca',
+  cloaca: 'agua_cloaca',
+  cloacas: 'agua_cloaca',
+  inseguridad: 'seguridad',
+  arbol: 'arbolado',
+  veredas: 'vereda'
+};
+
+const ETIQUETAS_CATEGORIA = {
+  bache: 'Bache',
+  basura: 'Basura',
+  luminaria: 'Luminaria',
+  semaforo: 'Semáforo',
+  seguridad: 'Seguridad',
+  animal_suelto: 'Animal suelto',
+  arbolado: 'Arbolado',
+  agua_cloaca: 'Agua y cloaca',
+  transito: 'Tránsito',
+  vereda: 'Vereda',
+  otros: 'Otros'
+};
+
+function normalizarCategoria(valorRaw) {
+  if (!valorRaw || typeof valorRaw !== 'string') {
+    return { categoria: 'otros', detalleExtra: '' };
+  }
+
+  const limpia = valorRaw
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '_');
+
+  if (CATEGORIAS_REPORTE.includes(limpia)) {
+    return { categoria: limpia, detalleExtra: '' };
+  }
+
+  if (ALIAS_CATEGORIAS[limpia]) {
+    return { categoria: ALIAS_CATEGORIAS[limpia], detalleExtra: '' };
+  }
+
+  // Si viene texto libre no catalogado, va a 'otros' y preserva el texto original en detalleExtra
+  return { categoria: 'otros', detalleExtra: valorRaw.trim() };
+}
 
 const HistorialEstadoSchema = new mongoose.Schema(
   {
@@ -105,8 +159,8 @@ const ReporteSchema = new mongoose.Schema({
   operadorAsignadoId: { type: String, default: null },
   operadorAsignadoNombre: { type: String, default: null },
 
-  // Datos del reporte
-  titulo: { type: String, required: true },
+  // Datos del reporte (titulo opcional en entrada: se autogenera si viene vacío)
+  titulo: { type: String, default: '' },
   columna_unica: { type: String, required: true },
 
   // Ubicación
@@ -133,6 +187,14 @@ const ReporteSchema = new mongoose.Schema({
     default: 'otros'
   },
 
+  // Texto libre del ciudadano cuando elige "otros" (no ensucia la dimensión analítica)
+  categoria_detalle: {
+    type: String,
+    default: '',
+    trim: true,
+    maxlength: 120
+  },
+
   // Categorización por IA / compatibilidad
   categoria_asignada_por_ia: { type: String, default: null },
   ia_procesado: { type: Boolean, default: false },
@@ -146,80 +208,70 @@ const ReporteSchema = new mongoose.Schema({
   etiquetas: [{ type: String }],
 
   ai_summary: {
-  type: String,
-  default: ''
-},
+    type: String,
+    default: ''
+  },
 
-proveedor_ia: {
-  type: String,
-  default: ''
-},
+  proveedor_ia: {
+    type: String,
+    default: ''
+  },
 
-modelo_ia: {
-  type: String,
-  default: ''
-},
+  modelo_ia: {
+    type: String,
+    default: ''
+  },
 
-ai_priority_score: {
-  type: Number,
-  default: 0
-},
+  ai_priority_score: {
+    type: Number,
+    default: 0
+  },
 
-posible_duplicado: {
-  type: Boolean,
-  default: false
-},
+  posible_duplicado: {
+    type: Boolean,
+    default: false
+  },
 
-reporte_duplicado_id: {
-  type: String,
-  default: null
-},
+  reporte_duplicado_id: {
+    type: String,
+    default: null
+  },
 
-duplicado_score: {
-  type: Number,
-  default: 0
-},
+  duplicado_score: {
+    type: Number,
+    default: 0
+  },
 
-duplicado_distancia_metros: {
-  type: Number,
-  default: null
-},
+  duplicado_distancia_metros: {
+    type: Number,
+    default: null
+  },
 
-vectorizado: {
-  type: Boolean,
-  default: false
-},
+  // Motor vectorial / embeddings
+  vectorizado: {
+    type: Boolean,
+    default: false
+  },
 
-vector_modelo: {
-  type: String,
-  default: null
-},
+  vector_modelo: {
+    type: String,
+    default: null
+  },
 
-// Motor vectorial / embeddings
-vectorizado: {
-  type: Boolean,
-  default: false
-},
+  embedding: {
+    type: [Number],
+    default: []
+  },
 
-vector_modelo: {
-  type: String,
-  default: null
-},
+  embedding_dimensiones: {
+    type: Number,
+    default: 0
+  },
 
-embedding: {
-  type: [Number],
-  default: []
-},
-
-embedding_dimensiones: {
-  type: Number,
-  default: 0
-},
-
-embedding_actualizado_en: {
-  type: Date,
-  default: null
-},
+  embedding_actualizado_en: {
+    type: Date,
+    default: null
+  },
 
   // Estado actual del reporte
   estado: {
@@ -261,6 +313,32 @@ embedding_actualizado_en: {
   updatedAt: { type: Date, default: Date.now }
 });
 
+// Hook de gobierno del dato antes de validar/guardar
+ReporteSchema.pre('validate', function (next) {
+  const { categoria, detalleExtra } = normalizarCategoria(this.categoria);
+  this.categoria = categoria;
+
+  if (!this.categoria_detalle && detalleExtra) {
+    this.categoria_detalle = detalleExtra;
+  }
+
+  // Autogenerar título limpio si el ciudadano no ingresó uno
+  if (!this.titulo || !this.titulo.trim()) {
+    const etiquetaCat = ETIQUETAS_CATEGORIA[this.categoria] || 'Incidente';
+    const sufijoDetalle =
+      this.categoria === 'otros' && this.categoria_detalle
+        ? `: ${this.categoria_detalle}`
+        : '';
+    const refDireccion = this.direccion ? ` — ${this.direccion.trim()}` : '';
+    this.titulo = `${etiquetaCat}${sufijoDetalle}${refDireccion}`;
+  } else {
+    this.titulo = this.titulo.trim();
+  }
+
+  this.updatedAt = new Date();
+  next();
+});
+
 // Índices
 ReporteSchema.index({ latitud: 1, longitud: 1 });
 ReporteSchema.index({ usuarioId: 1 });
@@ -277,4 +355,11 @@ ReporteSchema.index({ createdAt: -1 });
 ReporteSchema.index({ vectorizado: 1 });
 ReporteSchema.index({ embedding_dimensiones: 1 });
 
-module.exports = mongoose.model('Reporte', ReporteSchema);
+const Reporte = mongoose.model('Reporte', ReporteSchema);
+
+module.exports = Reporte;
+module.exports.ESTADOS_REPORTE = ESTADOS_REPORTE;
+module.exports.CATEGORIAS_REPORTE = CATEGORIAS_REPORTE;
+module.exports.PRIORIDADES_REPORTE = PRIORIDADES_REPORTE;
+module.exports.ETIQUETAS_CATEGORIA = ETIQUETAS_CATEGORIA;
+module.exports.normalizarCategoria = normalizarCategoria;

@@ -80,13 +80,41 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// ============================================================
+// 4.1 RUTAS DE USUARIOS
+// ============================================================
 app.use('/api/users', userRoutes);
+
+// ============================================================
+// 4.2 RUTAS DE REPORTES
+// ============================================================
 app.use('/api/reportes', reporteRoutes);
+
+// ============================================================
+// 4.3 RUTAS DE SUPERADMIN
+// ============================================================
 app.use('/api/super', superRoutes);
+
+// ============================================================
+// 4.4 RUTAS DE BUSINESS INTELLIGENCE PARA POWER BI
+// ============================================================
+// Scope: urbanflow.bi.read
+// Todos los endpoints son GET y requieren API Key
 app.use('/api/bi', biRoutes);
+
+// ============================================================
+// 4.5 RUTAS DE IA
+// ============================================================
 app.use('/api/ia', iaRoutes);
+
+// ============================================================
+// 4.6 RUTAS DE CLIMA
+// ============================================================
 app.use('/api/clima', climaRoutes);
 
+// ============================================================
+// 4.7 RUTA PROTEGIDA DE PRUEBA
+// ============================================================
 app.get('/api/protected', require('./middleware/auth').authMiddleware, (req, res) => {
   res.json({
     mensaje: "¡Funciona! Este es tu JSON",
@@ -118,6 +146,7 @@ if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {
     console.log(`🚀 Backend corriendo en http://localhost:${PORT}`);
     console.log(`📡 Endpoints disponibles:`);
+    console.log(`   ──────── Health ────────`);
     console.log(`   GET    /api/health`);
     console.log(`   GET    /api/protected`);
     console.log(`   ──────── Usuarios ────────`);
@@ -135,18 +164,21 @@ if (process.env.NODE_ENV !== 'production') {
     console.log(`   PUT    /api/reportes/:id`);
     console.log(`   DELETE /api/reportes/:id`);
     console.log(`   PUT    /api/reportes/:id/categoria-ia (admin)`);
-    console.log('   _____ Súper Usuario _____');
-    console.log('   GET    /api/super/dashboard');
-    console.log('   GET    /api/super/clientes');
-    console.log('   GET    /api/super/usuarios');
-    console.log('   GET    /api/super/reportes');
-    console.log('   _____ Business Intelligence / Power BI _____');
-    console.log('   Scope  urbanflow.bi.read');
-    console.log('   GET    /api/bi/health');
-    console.log('   GET    /api/bi/dashboard');
-    console.log('   GET    /api/bi/incidentes');
-    console.log('   GET    /api/bi/usuarios');
-    console.log('   GET    /api/bi/clientes');
+    console.log(`   ──────── Súper Usuario ────────`);
+    console.log(`   GET    /api/super/dashboard`);
+    console.log(`   GET    /api/super/clientes`);
+    console.log(`   GET    /api/super/usuarios`);
+    console.log(`   GET    /api/super/reportes`);
+    console.log(`   ──────── Business Intelligence / Power BI ────────`);
+    console.log(`   🔐 Scope: urbanflow.bi.read (requiere API Key)`);
+    console.log(`   GET    /api/bi/health`);
+    console.log(`   GET    /api/bi/dashboard`);
+    console.log(`   GET    /api/bi/incidentes`);
+    console.log(`   GET    /api/bi/usuarios`);
+    console.log(`   GET    /api/bi/clientes`);
+    console.log(`   GET    /api/bi/estados`);
+    console.log(`   GET    /api/bi/categorias`);
+    console.log(`   GET    /api/bi/asignaciones`);
     console.log(`   ──────── IA ────────`);
     console.log(`   POST   /api/ia/clasificar`);
     console.log(`   POST   /api/ia/reclasificar`);
