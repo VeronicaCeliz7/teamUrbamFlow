@@ -1,17 +1,21 @@
 const Reporte = require('../models/Reporte');
 const {
-  ESTADOS_REPORTE,
   CATEGORIAS_REPORTE,
   PRIORIDADES_REPORTE,
   ETIQUETAS_CATEGORIA,
   normalizarCategoria
 } = require('../models/Reporte');
+const {
+  ESTADOS_FINALES,
+  estadosPermitidos,
+  validarTransicionEstado,
+  validarTransicionPorRol,
+  registrarCambioEstado
+} = require('../services/reporteWorkflow');
 const User = require('../models/User');
 const cloudinary = require('../config/cloudinary');
 const { createClerkClient } = require('@clerk/clerk-sdk-node');
 //const { procesarIAReporte } = require('./iaController');
-
-const ESTADOS_FINALES = ['resuelto', 'verificado', 'cerrado', 'rechazado', 'duplicado'];
 
 const normalizarTexto = (valor = '') =>
   String(valor)
@@ -72,7 +76,7 @@ const getCatalogos = (_req, res) => {
         value: clave,
         label: ETIQUETAS_CATEGORIA[clave] || clave
       })),
-      estados: ESTADOS_REPORTE,
+      estados: Object.keys(ESTADOS_FINALES).length ? ESTADOS_FINALES : [],
       prioridades: PRIORIDADES_REPORTE
     }
   });
@@ -342,7 +346,9 @@ const updateReporte = async (req, res) => {
     const reporte = await Reporte.findById(id);
 
     if (!reporte) {
-      return res.status(404).json({ error: 'Reporte no encontrado' });
+      return res.status(404).json({
+        error: 'Reporte no encontrado'
+      });
     }
 
     const user = req.user || (await ensureUserExists(req.auth.userId));
@@ -398,23 +404,24 @@ const updateReporte = async (req, res) => {
   }
 };
 
+// Controlador exclusivo de la máquina de estados, para que no se pueda modificar el estado desde updateReporte
 const cambiarEstadoReporte = async (req, res) => {
   try {
     const { id } = req.params;
     const { estado, observacion, observaciones, motivoRechazo, motivoCierre } = req.body;
 
     if (!estado) {
-      return res.status(400).json({ error: 'El nuevo estado es obligatorio' });
-    }
-
-    if (!ESTADOS_REPORTE.includes(estado)) {
-      return res.status(400).json({ error: `Estado no válido: ${estado}` });
+      return res.status(400).json({
+        error: 'El nuevo estado es obligatorio'
+      });
     }
 
     const reporte = await Reporte.findById(id);
 
     if (!reporte) {
-      return res.status(404).json({ error: 'Reporte no encontrado' });
+      return res.status(404).json({
+        error: 'Reporte no encontrado'
+      });
     }
 
     const user = req.user || (await ensureUserExists(req.auth.userId));
@@ -452,13 +459,29 @@ const cambiarEstadoReporte = async (req, res) => {
       });
     }
 
+    if (!validarTransicionEstado(reporte.estado, estado)) {
+      return res.status(400).json({
+        error: 'Transición de estado no permitida',
+        estadoActual: reporte.estado,
+        estadoSolicitado: estado,
+        estadosPermitidos: estadosPermitidos(reporte.estado)
+      });
+    }
+
+    if (!validarTransicionPorRol(rol, reporte.estado, estado)) {
+      return res.status(403).json({
+        error: 'El rol no puede realizar esta transición',
+        rol,
+        estadoActual: reporte.estado,
+        estadoSolicitado: estado
+      });
+    }
+
     const textoObservacion = observacion || observaciones || '';
 
-    reporte.estado = estado;
-    reporte.historialEstados = reporte.historialEstados || [];
-    reporte.historialEstados.push({
-      estado,
-      fecha: new Date(),
+    registrarCambioEstado({
+      reporte,
+      nuevoEstado: estado,
       usuarioId: req.auth.userId,
       usuarioNombre: obtenerNombreUsuario(user),
       observacion: textoObservacion
@@ -540,10 +563,15 @@ const tomarReporte = async (req, res) => {
     const reporte = await Reporte.findById(id);
 
     if (!reporte) {
-      return res.status(404).json({ error: 'Reporte no encontrado' });
+      return res.status(404).json({
+        error: 'Reporte no encontrado'
+      });
     }
 
-    const esOperador = operador?.rol === 'operador' || operador?.rol === 'operator';
+    const esOperador =
+      operador?.rol === 'operador' ||
+      operador?.rol === 'operator';
+
     if (!esOperador) {
       return res.status(403).json({
         error: 'Sólo un operador puede tomar un incidente'
@@ -553,6 +581,14 @@ const tomarReporte = async (req, res) => {
     if (reporte.operadorAsignadoId) {
       return res.status(400).json({
         error: 'Este incidente ya fue tomado por otro operador'
+      });
+    }
+
+    if (!validarTransicionEstado(reporte.estado, 'asignado')) {
+      return res.status(400).json({
+        error: 'El incidente no puede ser tomado en su estado actual',
+        estadoActual: reporte.estado,
+        estadosPermitidos: estadosPermitidos(reporte.estado)
       });
     }
 
@@ -573,17 +609,16 @@ const tomarReporte = async (req, res) => {
 
     reporte.operadorAsignadoId = operador.clerkUserId;
     reporte.operadorAsignadoNombre = nombreOperador;
-    reporte.estado = 'asignado';
-    reporte.historialEstados = reporte.historialEstados || [];
-    reporte.historialEstados.push({
-      estado: 'asignado',
-      fecha: new Date(),
+
+    registrarCambioEstado({
+      reporte,
+      nuevoEstado: 'asignado',
       usuarioId: operador.clerkUserId,
       usuarioNombre: nombreOperador,
       observacion: 'Incidente tomado por operador'
     });
-    reporte.updatedAt = new Date();
 
+    reporte.updatedAt = new Date();
     await reporte.save();
 
     return res.json({
@@ -593,7 +628,9 @@ const tomarReporte = async (req, res) => {
     });
   } catch (error) {
     console.error('Error tomando reporte:', error);
-    return res.status(500).json({ error: 'Error al tomar incidente' });
+    return res.status(500).json({
+      error: 'Error al tomar incidente'
+    });
   }
 };
 
@@ -631,7 +668,9 @@ const asignarOperador = async (req, res) => {
     const { operadorId, operadorNombre } = req.body;
 
     if (!operadorId) {
-      return res.status(400).json({ error: 'operadorId es obligatorio' });
+      return res.status(400).json({
+        error: 'operadorId es obligatorio'
+      });
     }
 
     const admin = req.user || (await ensureUserExists(req.auth.userId));
@@ -643,12 +682,22 @@ const asignarOperador = async (req, res) => {
 
     const reporte = await Reporte.findById(id);
     if (!reporte) {
-      return res.status(404).json({ error: 'Reporte no encontrado' });
+      return res.status(404).json({
+        error: 'Reporte no encontrado'
+      });
     }
 
     if (reporte.operadorAsignadoId) {
       return res.status(400).json({
         error: 'El incidente ya tiene un operador asignado'
+      });
+    }
+
+    if (!validarTransicionEstado(reporte.estado, 'asignado')) {
+      return res.status(400).json({
+        error: 'El incidente no puede ser asignado en su estado actual',
+        estadoActual: reporte.estado,
+        estadosPermitidos: estadosPermitidos(reporte.estado)
       });
     }
 
@@ -684,17 +733,16 @@ const asignarOperador = async (req, res) => {
 
     reporte.operadorAsignadoId = operadorId;
     reporte.operadorAsignadoNombre = nombreOperador;
-    reporte.estado = 'asignado';
-    reporte.historialEstados = reporte.historialEstados || [];
-    reporte.historialEstados.push({
-      estado: 'asignado',
-      fecha: new Date(),
+
+    registrarCambioEstado({
+      reporte,
+      nuevoEstado: 'asignado',
       usuarioId: req.auth.userId,
       usuarioNombre: obtenerNombreUsuario(admin),
       observacion: `Incidente asignado a ${nombreOperador}`
     });
-    reporte.updatedAt = new Date();
 
+    reporte.updatedAt = new Date();
     await reporte.save();
 
     return res.json({
@@ -704,7 +752,9 @@ const asignarOperador = async (req, res) => {
     });
   } catch (error) {
     console.error('Error asignarOperador:', error);
-    return res.status(500).json({ error: 'Error al asignar operador' });
+    return res.status(500).json({
+      error: 'Error al asignar operador'
+    });
   }
 };
 
