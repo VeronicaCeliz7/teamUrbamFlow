@@ -45,11 +45,8 @@ const TRANSICIONES_VALIDAS = Object.freeze({
   ]
 });
 
-
 const TRANSICIONES_POR_ROL = Object.freeze({
-
   admin: {
-
     reportado: [
       'validacion_inicial'
     ],
@@ -70,6 +67,10 @@ const TRANSICIONES_POR_ROL = Object.freeze({
       'validacion_inicial'
     ],
 
+    aceptado: [
+      'asignado'
+    ],
+
     resuelto: [
       'verificado',
       'en_proceso'
@@ -80,9 +81,7 @@ const TRANSICIONES_POR_ROL = Object.freeze({
     ]
   },
 
-
   operador: {
-
     asignado: [
       'en_proceso'
     ],
@@ -92,10 +91,8 @@ const TRANSICIONES_POR_ROL = Object.freeze({
     ]
   },
 
-
   // El modelo de User admite ambos nombres
   operator: {
-
     asignado: [
       'en_proceso'
     ],
@@ -106,7 +103,6 @@ const TRANSICIONES_POR_ROL = Object.freeze({
   }
 });
 
-
 const ESTADOS_FINALES = Object.freeze([
   'cerrado',
   'rechazado',
@@ -114,48 +110,55 @@ const ESTADOS_FINALES = Object.freeze([
   'fuera_de_jurisdiccion'
 ]);
 
-
-const estadosPermitidos = (estadoActual) => {
-  return TRANSICIONES_VALIDAS[estadoActual] || [];
+const normalizarClave = (valor) => {
+  if (!valor || typeof valor !== 'string') return '';
+  return valor.trim().toLowerCase();
 };
 
+const estadosPermitidos = (estadoActual) => {
+  const clave = normalizarClave(estadoActual);
+  return TRANSICIONES_VALIDAS[clave] || [];
+};
 
 const validarTransicionEstado = (
   estadoActual,
   nuevoEstado
 ) => {
+  const actual = normalizarClave(estadoActual);
+  const siguiente = normalizarClave(nuevoEstado);
 
-  return estadosPermitidos(estadoActual)
-    .includes(nuevoEstado);
+  if (ESTADOS_FINALES.includes(actual)) {
+    return false;
+  }
+
+  return estadosPermitidos(actual).includes(siguiente);
 };
-
 
 const validarTransicionPorRol = (
   rol,
   estadoActual,
   nuevoEstado
 ) => {
+  const rolNormalizado = normalizarClave(rol);
+  const actual = normalizarClave(estadoActual);
+  const siguiente = normalizarClave(nuevoEstado);
 
-  const reglasRol =
-    TRANSICIONES_POR_ROL[rol] || {};
+  if (!validarTransicionEstado(actual, siguiente)) {
+    return false;
+  }
 
-  return (
-    reglasRol[estadoActual] || []
-  ).includes(nuevoEstado);
+  const reglasRol = TRANSICIONES_POR_ROL[rolNormalizado] || {};
+  return (reglasRol[actual] || []).includes(siguiente);
 };
 
-
 const asegurarHistorialBase = (reporte) => {
-
   if (!reporte.historialEstados) {
     reporte.historialEstados = [];
   }
 
-
   /*
    * Esto contempla reportes antiguos.
    * No inventamos su historia anterior.
-   *
    * Simplemente dejamos constancia del estado
    * que tenían cuando comenzó la trazabilidad.
    */
@@ -163,97 +166,82 @@ const asegurarHistorialBase = (reporte) => {
     reporte.historialEstados.length === 0 &&
     reporte.estado
   ) {
-
     reporte.historialEstados.push({
-
       estado: reporte.estado,
-
       fecha:
         reporte.createdAt ||
         reporte.fecha_hora ||
         new Date(),
-
       usuarioId: null,
-
       usuarioNombre: 'Sistema',
-
       observacion:
         'Estado existente al iniciar la trazabilidad'
     });
   }
 };
 
-
 const registrarCambioEstado = ({
   reporte,
   nuevoEstado,
   usuarioId,
   usuarioNombre,
-  observacion = ''
+  observacion = '',
+  rol = null
 }) => {
+  const estadoAnterior = reporte.estado;
+  const siguiente = normalizarClave(nuevoEstado);
+
+  if (!validarTransicionEstado(estadoAnterior, siguiente)) {
+    throw new Error(
+      `Transición de estado no permitida: ${estadoAnterior} -> ${nuevoEstado}`
+    );
+  }
+
+  if (rol && !validarTransicionPorRol(rol, estadoAnterior, siguiente)) {
+    throw new Error(
+      `El rol "${rol}" no puede realizar la transición: ${estadoAnterior} -> ${nuevoEstado}`
+    );
+  }
 
   asegurarHistorialBase(reporte);
 
-
-  const estadoAnterior =
-    reporte.estado;
-
-  const ahora =
-    new Date();
-
+  const ahora = new Date();
 
   reporte.historialEstados.push({
-
-    estado: nuevoEstado,
-
+    estado: siguiente,
     fecha: ahora,
-
     usuarioId,
-
     usuarioNombre,
-
     observacion:
       observacion ||
-      `Cambio de estado: ${estadoAnterior} -> ${nuevoEstado}`
+      `Cambio de estado: ${estadoAnterior} -> ${siguiente}`
   });
 
+  reporte.estado = siguiente;
+  reporte.updatedAt = ahora;
 
-  reporte.estado =
-    nuevoEstado;
-
-  reporte.updatedAt =
-    ahora;
-
-
-  if (nuevoEstado === 'asignado') {
+  if (siguiente === 'asignado') {
     reporte.fechaAsignacion = ahora;
   }
 
-  if (nuevoEstado === 'resuelto') {
+  if (siguiente === 'resuelto') {
     reporte.fechaResolucion = ahora;
   }
 
-  if (nuevoEstado === 'verificado') {
+  if (siguiente === 'verificado') {
     reporte.fechaVerificacion = ahora;
   }
 
-  if (nuevoEstado === 'cerrado') {
+  if (siguiente === 'cerrado') {
     reporte.fechaCierre = ahora;
   }
 };
 
-
 module.exports = {
-
   ESTADOS_FINALES,
-
   estadosPermitidos,
-
   validarTransicionEstado,
-
   validarTransicionPorRol,
-
   asegurarHistorialBase,
-
   registrarCambioEstado
 };
