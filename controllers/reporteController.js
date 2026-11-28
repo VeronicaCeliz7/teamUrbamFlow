@@ -1,4 +1,3 @@
-const Reporte = require('../models/Reporte');
 const {
   CATEGORIAS_REPORTE,
   PRIORIDADES_REPORTE,
@@ -13,9 +12,14 @@ const {
   registrarCambioEstado
 } = require('../services/reporteWorkflow');
 const User = require('../models/User');
-const cloudinary = require('../config/cloudinary');
+const cloudinaryAdapter = require('../src/adapters/cloudinaryAdapter');
+const { validarContratoMediaStorage } = require('../src/adapters/mediaStorageContract');
+const mongoReporteRepository = require('../src/repositories/mongoReporteRepository');
+const { validarContratoReporteRepository } = require('../src/repositories/reporteRepositoryContract');
 const { createClerkClient } = require('@clerk/clerk-sdk-node');
-//const { procesarIAReporte } = require('./iaController');
+
+const mediaStorage = validarContratoMediaStorage(cloudinaryAdapter);
+const reporteRepository = validarContratoReporteRepository(mongoReporteRepository);
 
 const normalizarTexto = (valor = '') =>
   String(valor)
@@ -76,7 +80,7 @@ const getCatalogos = (_req, res) => {
         value: clave,
         label: ETIQUETAS_CATEGORIA[clave] || clave
       })),
-      estados: Object.keys(ESTADOS_FINALES).length ? ESTADOS_FINALES : [],
+      estados: [...ESTADOS_FINALES],
       prioridades: PRIORIDADES_REPORTE
     }
   });
@@ -128,7 +132,7 @@ const createReporte = async (req, res) => {
     const detalleFinal = (categoria_detalle || detalleExtra || '').trim();
     const estadoInicial = 'reportado';
 
-    const reporte = new Reporte({
+    const reporte = await reporteRepository.crear({
       usuarioId: req.auth.userId,
       usuarioEmail: user.email,
 
@@ -177,8 +181,6 @@ const createReporte = async (req, res) => {
       esDemo: req.body.esDemo || false
     });
 
-    await reporte.save();
-
     res.status(201).json({
       success: true,
       message: 'Reporte creado exitosamente',
@@ -203,84 +205,7 @@ const createReporte = async (req, res) => {
 
 const getReportes = async (req, res) => {
   try {
-    const {
-      estado,
-      categoria,
-      prioridad,
-      lat,
-      lng,
-      radio,
-      municipio,
-      localidad,
-      operadorId,
-      sinAsignar
-    } = req.query;
-
-    let filtro = {};
-
-    if (estado) filtro.estado = estado;
-    if (prioridad) filtro.prioridad = prioridad;
-
-    if (categoria) {
-      const categoriaRegex = new RegExp(
-        categoria.toString().trim().replace(/[-_\s]+/g, '[-_\\s]*'),
-        'i'
-      );
-
-      filtro.$or = [
-        { categoria: categoriaRegex },
-        { categoria_detalle: categoriaRegex },
-        { categoria_asignada_por_ia: categoriaRegex },
-        { etiquetas: categoriaRegex }
-      ];
-    }
-
-    if (operadorId) filtro.operadorAsignadoId = operadorId;
-
-    if (sinAsignar === 'true') {
-      filtro.operadorAsignadoId = null;
-    }
-
-    const territorio = municipio || localidad;
-
-    if (territorio) {
-      const territorioNormalizado = normalizarTexto(territorio);
-
-      const territorioRegex = new RegExp(
-        territorioNormalizado.replace(/-/g, '[-_\\s]*'),
-        'i'
-      );
-
-      const condicionesTerritorio = [
-        { municipio: territorioRegex },
-        { localidad: territorioRegex },
-        { direccion: territorioRegex }
-      ];
-
-      if (territorioNormalizado === 'villa-maria') {
-        condicionesTerritorio.push({
-          latitud: { $gte: -32.45, $lte: -32.35 },
-          longitud: { $gte: -63.32, $lte: -63.18 }
-        });
-      }
-
-      if (filtro.$or) {
-        filtro.$and = [
-          { $or: filtro.$or },
-          { $or: condicionesTerritorio }
-        ];
-        delete filtro.$or;
-      } else {
-        filtro.$or = condicionesTerritorio;
-      }
-    }
-
-    if (lat && lng && radio) {
-      filtro.latitud = { $exists: true, $ne: 0 };
-      filtro.longitud = { $exists: true, $ne: 0 };
-    }
-
-    const reportes = await Reporte.find(filtro).sort({ createdAt: -1 });
+    const reportes = await reporteRepository.listar(req.query);
 
     res.json({
       success: true,
@@ -299,7 +224,7 @@ const getReportes = async (req, res) => {
 
 const getReporteById = async (req, res) => {
   try {
-    const reporte = await Reporte.findById(req.params.id);
+    const reporte = await reporteRepository.buscarPorId(req.params.id);
 
     if (!reporte) {
       return res.status(404).json({ error: 'Reporte no encontrado' });
@@ -316,9 +241,7 @@ const getMisReportes = async (req, res) => {
   try {
     await ensureUserExists(req.auth.userId);
 
-    const reportes = await Reporte.find({
-      usuarioId: req.auth.userId
-    }).sort({ createdAt: -1 });
+    const reportes = await reporteRepository.listarPorUsuario(req.auth.userId);
 
     res.json({
       success: true,
@@ -343,7 +266,7 @@ const updateReporte = async (req, res) => {
       motivoCierre
     } = req.body;
 
-    const reporte = await Reporte.findById(id);
+    const reporte = await reporteRepository.buscarPorId(id);
 
     if (!reporte) {
       return res.status(404).json({
@@ -391,7 +314,7 @@ const updateReporte = async (req, res) => {
     }
 
     reporte.updatedAt = new Date();
-    await reporte.save();
+    await reporteRepository.guardar(reporte);
 
     res.json({
       success: true,
@@ -416,7 +339,7 @@ const cambiarEstadoReporte = async (req, res) => {
       });
     }
 
-    const reporte = await Reporte.findById(id);
+    const reporte = await reporteRepository.buscarPorId(id);
 
     if (!reporte) {
       return res.status(404).json({
@@ -501,7 +424,7 @@ const cambiarEstadoReporte = async (req, res) => {
     }
 
     reporte.updatedAt = new Date();
-    await reporte.save();
+    await reporteRepository.guardar(reporte);
 
     return res.json({
       success: true,
@@ -520,7 +443,7 @@ const deleteReporte = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const reporte = await Reporte.findById(id);
+    const reporte = await reporteRepository.buscarPorId(id);
 
     if (!reporte) {
       return res.status(404).json({ error: 'Reporte no encontrado' });
@@ -536,14 +459,10 @@ const deleteReporte = async (req, res) => {
     }
 
     if (reporte.archivo_public_id) {
-      try {
-        await cloudinary.uploader.destroy(reporte.archivo_public_id);
-      } catch (cloudinaryError) {
-        console.error('Error al eliminar de Cloudinary:', cloudinaryError);
-      }
+      await mediaStorage.eliminarArchivo(reporte.archivo_public_id, reporte.archivo_tipo);
     }
 
-    await Reporte.findByIdAndDelete(id);
+    await reporteRepository.eliminarPorId(id);
 
     res.json({
       success: true,
@@ -560,7 +479,7 @@ const tomarReporte = async (req, res) => {
     const { id } = req.params;
 
     const operador = await ensureUserExists(req.auth.userId);
-    const reporte = await Reporte.findById(id);
+    const reporte = await reporteRepository.buscarPorId(id);
 
     if (!reporte) {
       return res.status(404).json({
@@ -619,7 +538,7 @@ const tomarReporte = async (req, res) => {
     });
 
     reporte.updatedAt = new Date();
-    await reporte.save();
+    await reporteRepository.guardar(reporte);
 
     return res.json({
       success: true,
@@ -640,16 +559,12 @@ const updateCategoriaIA = async (req, res) => {
     const { categoria_asignada_por_ia } = req.body;
     const { categoria: catNorm } = normalizarCategoria(categoria_asignada_por_ia);
 
-    const reporte = await Reporte.findByIdAndUpdate(
-      id,
-      {
-        categoria_asignada_por_ia,
-        categoria: catNorm,
-        ia_procesado: true,
-        updatedAt: Date.now()
-      },
-      { new: true }
-    );
+    const reporte = await reporteRepository.actualizarCategoriaIA(id, {
+      categoria_asignada_por_ia,
+      categoria: catNorm,
+      ia_procesado: true,
+      updatedAt: Date.now()
+    });
 
     if (!reporte) {
       return res.status(404).json({ error: 'Reporte no encontrado' });
@@ -680,7 +595,7 @@ const asignarOperador = async (req, res) => {
       });
     }
 
-    const reporte = await Reporte.findById(id);
+    const reporte = await reporteRepository.buscarPorId(id);
     if (!reporte) {
       return res.status(404).json({
         error: 'Reporte no encontrado'
@@ -743,7 +658,7 @@ const asignarOperador = async (req, res) => {
     });
 
     reporte.updatedAt = new Date();
-    await reporte.save();
+    await reporteRepository.guardar(reporte);
 
     return res.json({
       success: true,
