@@ -314,7 +314,7 @@ const ReporteSchema = new mongoose.Schema({
 });
 
 // Hook de gobierno del dato antes de validar/guardar
-ReporteSchema.pre('validate', function (next) {
+ReporteSchema.pre('validate', function () {
   const { categoria, detalleExtra } = normalizarCategoria(this.categoria);
   this.categoria = categoria;
 
@@ -336,7 +336,6 @@ ReporteSchema.pre('validate', function (next) {
   }
 
   this.updatedAt = new Date();
-  next();
 });
 
 // Índices
